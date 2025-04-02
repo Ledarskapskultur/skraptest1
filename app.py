@@ -357,15 +357,27 @@ if st.button("Skicka information via mail"):
         st.warning("Vänligen välj minst en kurs och ange din mailadress.")
 
 #############################
-# Rådata från Rezon
+# Rådata från Rezon visad som lista
 #############################
 
-st.subheader("Rådata från Rezon")
-with st.expander("Visa rådata från https://rezon.se/kurskategorier/ugl/"):
-    @st.cache_data
-    def fetch_rezon_data():
-        url = "https://rezon.se/kurskategorier/ugl/"
-        response = requests.get(url)
-        return response.text
-    raw_rezon = fetch_rezon_data()
-    st.code(raw_rezon, language="html")
+st.subheader("Kurskategorier från Rezon")
+@st.cache_data
+def fetch_rezon_data():
+    url = "https://rezon.se/kurskategorier/ugl/"
+    response = requests.get(url)
+    soup = BeautifulSoup(response.content, "html.parser")
+    # Försök hitta en <ul> med klass "list-unstyled" (justera vid behov)
+    container = soup.find("ul", class_="list-unstyled")
+    if container:
+        items = container.find_all("li")
+    else:
+        items = soup.find_all("li")
+    # Returnera en lista med textinnehåll från varje <li>
+    return [item.get_text(strip=True) for item in items if item.get_text(strip=True)]
+
+rezon_list = fetch_rezon_data()
+if rezon_list:
+    for item in rezon_list:
+        st.markdown(f"- {item}")
+else:
+    st.write("Ingen data hittades från Rezon.")
