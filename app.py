@@ -29,7 +29,7 @@ def fetch_ugl_data():
             datum = kursdatum_rader[0] if len(kursdatum_rader) > 0 else ""
             vecka = kursdatum_rader[1].replace("Vecka", "").strip() if len(kursdatum_rader) > 1 else ""
 
-            # === Kursplats: dela upp anläggning/ort ===
+            # === Kursplats ===
             kursplats_rader = list(cols[1].stripped_strings)
             anlaggning_och_ort = kursplats_rader[0] if len(kursplats_rader) > 0 else ""
             anlaggning_split = anlaggning_och_ort.split(",")
@@ -42,8 +42,8 @@ def fetch_ugl_data():
 
             # === Kursledare ===
             kursledare_rader = list(cols[2].stripped_strings)
-            kursledare1 = kursledare_rader[0] if len(kursledare_rader) > 0 else ""
-            kursledare2 = kursledare_rader[1] if len(kursledare_rader) > 1 else ""
+            kursledare1 = add_space_between_words(kursledare_rader[0]) if len(kursledare_rader) > 0 else ""
+            kursledare2 = add_space_between_words(kursledare_rader[1]) if len(kursledare_rader) > 1 else ""
 
             # === Pris ===
             pris_rader = list(cols[3].stripped_strings)
@@ -66,17 +66,18 @@ df = fetch_ugl_data()
 
 st.subheader("🔍 Förhandsvisning av de tre första kurserna")
 
-for index, row in df.head(3).iterrows():
-    st.markdown(f"""
-    ---
-    📅 **Vecka {row['Vecka']}**  
-    📆 Datum: {row['Datum']}  
-    🏨 Anläggning: {row['Anläggning']}  
-    📍 Ort: {row['Ort']}  
-    ✅ Platser kvar: {row['Platser kvar']}  
-    👥 Kursledare: {row['Kursledare1']} och {row['Kursledare2']}  
-    💰 Pris: {row['Pris']}
-    """)
+col1, col2 = st.columns(2)
+
+for i, row in df.head(3).iterrows():
+    target_col = col1 if i % 2 == 0 else col2
+    with target_col:
+        st.markdown(f"""
+        ---
+        📅 **Vecka {row['Vecka']}**   📆 **Datum: {row['Datum']}**  
+        🏨 **Anläggning: {row['Anläggning']}**   📍 **Ort: {row['Ort']}**  
+        💰 **Pris: {row['Pris']}**   ✅ **Platser kvar: {row['Platser kvar']}**  
+        👥 **Kursledare: {row['Kursledare1']} och {row['Kursledare2']}**
+        """)
 
 st.subheader("📋 Fullständig kurslista")
 st.dataframe(df, use_container_width=True)
