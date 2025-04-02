@@ -104,7 +104,6 @@ def format_spots(spots):
         color = "orange"
     else:
         try:
-            # Extrahera siffror (t.ex. "3+" ger "3")
             digits = re.sub(r"\D", "", text)
             if digits == "":
                 color = "orange"
@@ -187,19 +186,14 @@ filter_active = bool(week_filter_set or price_filter_value > 0 or restid_active)
 filtered_df = df.copy()
 
 if filter_active:
-    # Veckofiltrering
     if week_filter_set:
         try:
             filtered_df = filtered_df[filtered_df["Vecka"].astype(int).isin(week_filter_set)]
         except Exception as e:
             st.error("Fel vid filtrering av vecka: " + str(e))
-    
-    # Prisfiltrering (kurspris <= maxpris + 500)
     if price_filter_value > 0:
         filtered_df["PriceInt"] = filtered_df["Pris"].apply(extract_price)
         filtered_df = filtered_df[filtered_df["PriceInt"] <= (price_filter_value + 500)]
-    
-    # Restidsfiltrering: Gäller endast kurser med Ort == "eskilstuna"
     if restid_active:
         def passes_restid(row):
             if row["Ort"].lower() == "eskilstuna":
@@ -209,7 +203,6 @@ if filter_active:
                 return True
         filtered_df = filtered_df[filtered_df.apply(passes_restid, axis=1)]
 else:
-    # Om inga filter anges, visa de kommande 2 veckornas kurser (utifrån aktuell vecka)
     current_week = datetime.datetime.now().isocalendar()[1]
     allowed_weeks = {current_week + 1, current_week + 2}
     try:
@@ -217,7 +210,7 @@ else:
     except:
         pass
 
-# Visa alla kurser i rader om 3 per rad
+# Visa alla kurser i rader med 3 per rad
 
 st.subheader("🔍 Välj kurser")
 courses = list(filtered_df.iterrows())
@@ -250,12 +243,12 @@ if selected_courses:
     st.subheader("✅ Du har valt följande kurser:")
     st.dataframe(pd.DataFrame(selected_courses), use_container_width=True)
 
-# Knapp för att visa fullständig kurslista (visas vid klick)
+# Knapp för att visa fullständig kurslista
 if st.button("Visa Fullständig kurslista"):
     st.subheader("📋 Fullständig kurslista")
     st.dataframe(filtered_df, use_container_width=True)
 
-# Möjlighet att skicka information via mail (HTML-tabell)
+# Skicka information via mail (HTML-tabell)
 st.subheader("Skicka information om dina valda kurser")
 if st.button("Skicka information via mail"):
     if selected_courses and mail.strip():
@@ -284,4 +277,8 @@ if st.button("Skicka information via mail"):
         subject = "Valda kurser"
         mailto_link = f"mailto:{mail}?subject={urllib.parse.quote(subject)}&body={urllib.parse.quote(table_html)}"
         st.markdown(
-            f"**Klicka [här]({mailto_link}) för att
+            f"**Klicka [här]({mailto_link}) för att skicka ett mail med dina valda kurser.**<br><em>OBS! Alla e-postklienter visar inte HTML korrekt.</em>",
+            unsafe_allow_html=True
+        )
+    else:
+        st.warning("Vänligen välj minst en kurs och ange din mailadress.")
