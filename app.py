@@ -12,6 +12,13 @@ URL = "https://www.uglkurser.se/datumochpriser.php"
 def add_space_between_words(text):
     return re.sub(r'(?<=[a-zåäö])(?=[A-ZÅÄÖ])', ' ', text)
 
+def shorten_year(datum):
+    """
+    Ersätt '2025' med '25' om datumsträngen matchar mönstret "dd Mmm - dd Mmm yyyy".
+    Exempel: "07 Apr - 11 Apr 2025" -> "07 Apr - 11 Apr 25"
+    """
+    return re.sub(r'(\d{2} \w{3} - \d{2} \w{3} )\d{2}(\d{2})', r'\1\2', datum)
+
 @st.cache_data
 def fetch_ugl_data():
     response = requests.get(URL)
@@ -27,6 +34,7 @@ def fetch_ugl_data():
             # === Kursdatum & Vecka ===
             kursdatum_rader = list(cols[0].stripped_strings)
             datum = kursdatum_rader[0] if len(kursdatum_rader) > 0 else ""
+            datum = shorten_year(datum)
             vecka = kursdatum_rader[1].replace("Vecka", "").strip() if len(kursdatum_rader) > 1 else ""
             
             # === Kursplats: Anläggning, Ort, Platser kvar ===
@@ -66,7 +74,7 @@ df = fetch_ugl_data()
 
 st.subheader("🔍 Välj kurser")
 
-# Visa kurser i 3 kolumner (3 per rad, totalt 9 kurser visas här; ändra .head(n) vid behov)
+# Visa kurser i 3 kolumner (3 per rad; justera .head(n) om du vill visa fler)
 cols = st.columns(3)
 selected_courses = []
 
