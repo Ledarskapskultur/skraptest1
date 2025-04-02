@@ -9,7 +9,6 @@ st.title("UGL Kurser – Datum och priser")
 
 URL = "https://www.uglkurser.se/datumochpriser.php"
 
-# Lägg till mellanslag mellan ihopklistrade ord
 def add_space_between_words(text):
     return re.sub(r'(?<=[a-zåäö])(?=[A-ZÅÄÖ])', ' ', text)
 
@@ -19,32 +18,46 @@ def fetch_ugl_data():
     soup = BeautifulSoup(response.content, "html.parser")
 
     table = soup.find("table")
-    rows = table.find_all("tr")[1:]  # Hoppa över tabellhuvudet
+    rows = table.find_all("tr")[1:]
 
     data = []
     for row in rows:
         cols = row.find_all("td")
-        if len(cols) >= 5:
-            raw_vecka_datum = cols[0].get_text(strip=True)
+        if len(cols) >= 4:
+            # === Kursdatum ===
+            kursdatum_rader = cols[0].stripped_strings
+            kursdatum_rader = list(kursdatum_rader)
+            datum = kursdatum_rader[0] if len(kursdatum_rader) > 0 else ""
+            vecka = kursdatum_rader[1].replace("Vecka", "").strip() if len(kursdatum_rader) > 1 else ""
 
-            # Hämta datumintervall och vecka ur samma cell
-            match_datum = re.search(r'\d{2} \w{3} - \d{2} \w{3} \d{4}', raw_vecka_datum)
-            match_vecka = re.search(r'Vecka\s*\d+|\b\d{1,2}\b', raw_vecka_datum)
+            # === Kursplats ===
+            kursplats_rader = cols[1].stripped_strings
+            kursplats_rader = list(kursplats_rader)
+            anlaggning = kursplats_rader[0] if len(kursplats_rader) > 0 else ""
+            ort = kursplats_rader[1].replace("Platser kvar:", "").strip() if len(kursplats_rader) > 1 else ""
 
-            datum = match_datum.group(0) if match_datum else ""
-            vecka = match_vecka.group(0).replace("Vecka", "").strip() if match_vecka else ""
+            # === Kursledare ===
+            kursledare_rader = cols[2].stripped_strings
+            kursledare_rader = list(kursledare_rader)
+            kursledare1 = kursledare_rader[0] if len(kursledare_rader) > 0 else ""
+            kursledare2 = kursledare_rader[1] if len(kursledare_rader) > 1 else ""
 
-            ort = add_space_between_words(cols[2].get_text(strip=True))
-            kursledare = add_space_between_words(cols[3].get_text(strip=True))
-            pris = add_space_between_words(cols[4].get_text(strip=True))
+            # === Pris ===
+            pris_rader = cols[3].stripped_strings
+            pris_rader = list(pris_rader)
+            pris = pris_rader[0] if len(pris_rader) > 0 else ""
 
+            # Lägg till rad i listan
             data.append({
                 "Vecka": vecka,
                 "Datum": datum,
+                "Anläggning": anlaggning,
                 "Ort": ort,
-                "Kursledare": kursledare,
+                "Kursledare1": kursledare1,
+                "Kursledare2": kursledare2,
                 "Pris": pris
             })
+
     return pd.DataFrame(data)
 
 df = fetch_ugl_data()
@@ -56,8 +69,9 @@ for index, row in df.head(3).iterrows():
     ---
     📅 **Vecka {row['Vecka']}**  
     📆 Datum: {row['Datum']}  
+    🏨 Anläggning: {row['Anläggning']}  
     📍 Ort: {row['Ort']}  
-    👥 Kursledare: {row['Kursledare']}  
+    👥 Kursledare: {row['Kursledare1']} och {row['Kursledare2']}  
     💰 Pris: {row['Pris']}
     """)
 
