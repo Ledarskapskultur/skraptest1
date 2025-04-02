@@ -19,7 +19,6 @@ def generate_random_id(length=6):
     characters = string.ascii_uppercase + string.digits
     return ''.join(random.choices(characters, k=length))
 
-# Initiera ett slumpmässigt ID i session_state om det inte redan finns
 if "random_id" not in st.session_state:
     st.session_state.random_id = generate_random_id()
 
@@ -37,7 +36,6 @@ st.sidebar.text_input("ID", value=st.session_state.random_id, disabled=True)
 # SIDOPANEL: Filter
 ####################################
 st.sidebar.header("Filter")
-# Ändra etikett från "Vecka" till "V"
 col_v, col_pris = st.sidebar.columns(2)
 week_filter_input = col_v.text_input("V (t.ex. 7,15 eller 35-37)")
 price_filter_input = col_pris.number_input("Max Pris (kr)", min_value=0, value=0, step=100)
@@ -52,7 +50,6 @@ user_restid = col_res.number_input("Restid (timmar)", min_value=0, value=0, step
 # Hjälpfunktioner för UGL-data
 ####################################
 def parse_week_filter(week_str):
-    """Parsa en sträng med veckonummer, t.ex. "7,15 eller 35-37" till en mängd heltal."""
     allowed = set()
     if not week_str.strip():
         return allowed
@@ -89,7 +86,6 @@ def add_space_between_words(text):
     return re.sub(r'(?<=[a-zåäö])(?=[A-ZÅÄÖ])', ' ', text)
 
 def shorten_year(datum):
-    """Byter ut 4-siffrigt årtal mot 2-siffrigt i en datumsträng."""
     return re.sub(r'(\d{2} \w{3} - \d{2} \w{3} )\d{2}(\d{2})', r'\1\2', datum)
 
 # Konverterar datum från formatet "YYYY-MM-DD - YYYY-MM-DD" till "DD/M - DD/M YY"
@@ -143,7 +139,6 @@ def fetch_ugl_data():
         datum = kursdatum_rader[0] if len(kursdatum_rader) > 0 else ""
         datum = format_course_date(datum)
         vecka = kursdatum_rader[1].replace("Vecka", "").strip() if len(kursdatum_rader) > 1 else ""
-        # Lägg till prefixet "📅 Vecka "
         vecka = f"📅 Vecka {vecka}"
         kursplats_rader = list(cols[1].stripped_strings)
         anlaggning_och_ort = kursplats_rader[0] if len(kursplats_rader) > 0 else ""
@@ -166,7 +161,8 @@ def fetch_ugl_data():
             "Handledare1": handledare1,
             "Handledare2": handledare2,
             "Pris": pris,
-            "Platser kvar": platser_kvar
+            "Platser kvar": platser_kvar,
+            "Källa": "UGL"
         })
     return pd.DataFrame(data)
 
@@ -176,18 +172,17 @@ ugl_df = fetch_ugl_data()
 # Processa Rezon-data
 ####################################
 def process_rezon_row(row_dict):
-    # Kursfältet ignoreras
     kursdatum = row_dict.get("Kursdatum", "")
     if "Vecka" in kursdatum:
         date_part, week_part = kursdatum.split("Vecka", 1)
-        date_part = date_part.strip()  # ex: "2025-04-07 - 2025-04-11"
-        week_part = week_part.strip()  # ex: "15"
+        date_part = date_part.strip()   # ex: "2025-04-07 - 2025-04-11"
+        week_part = week_part.strip()     # ex: "15"
     else:
         date_part = kursdatum.strip()
         week_part = ""
     def transform_date(d):
         parts = d.split(" - ")
-        if len(parts) == 2:
+        if len(parts)==2:
             try:
                 s = parts[0].split("-")
                 e = parts[1].split("-")
@@ -198,7 +193,6 @@ def process_rezon_row(row_dict):
             return d
     new_date = transform_date(date_part)
     new_week = f"📅 Vecka {week_part}" if week_part else ""
-    # Utbildningsort: om texten innehåller "Tylebäck", sätt fasta värden
     utbildningsort = row_dict.get("Utbildningsort", "")
     if "Tylebäck" in utbildningsort:
         new_anlaggning = "🏨 Sundbyholms Slott"
@@ -208,7 +202,6 @@ def process_rezon_row(row_dict):
         parts = utd.split()
         new_anlaggning = parts[0] if parts else utd
         new_ort = " ".join(parts[1:]) if len(parts) > 1 else ""
-    # Handledare: dela upp i två
     handledare = row_dict.get("Handledare", "")
     def split_handledare(text):
         m = re.findall(r'[A-ZÅÄÖ][^A-ZÅÄÖ]+', text)
@@ -221,7 +214,6 @@ def process_rezon_row(row_dict):
             else:
                 return text, ""
     new_handledare1, new_handledare2 = split_handledare(add_space_between_words(handledare))
-    # Pris: summera kurspris och kost/logi
     pris_text = row_dict.get("Pris", "")
     prices = re.findall(r'(\d[\d\s]*)\s*kr', pris_text)
     total_price = 0
@@ -231,7 +223,6 @@ def process_rezon_row(row_dict):
         except:
             pass
     new_pris = f"{total_price} kr"
-    # Bokningsdetaljer: om "Fullbokad", sätt platser kvar till "Få"
     bokningsdetaljer = row_dict.get("Bokningsdetaljer", "")
     new_platser = "Få" if "fullbokad" in bokningsdetaljer.lower() else bokningsdetaljer
     return {
@@ -242,7 +233,8 @@ def process_rezon_row(row_dict):
         "Handledare1": new_handledare1,
         "Handledare2": new_handledare2,
         "Pris": new_pris,
-        "Platser kvar": new_platser
+        "Platser kvar": new_platser,
+        "Källa": "Rezon"
     }
 
 @st.cache_data
@@ -260,10 +252,10 @@ def fetch_rezon_data():
         if cells:
             row_dict = dict(zip(headers, cells))
             processed = process_rezon_row(row_dict)
-            # Ignorera rader där "Kurs" innehåller "UGL - Utveckling av grupp och ledare" (dvs. ta bort dem)
+            # Ignorera om kursnamnet innehåller "UGL - Utveckling av grupp och ledare"
             kurs_namn = row_dict.get("Kurs", "")
             if "UGL - Utveckling av grupp och ledare" in kurs_namn:
-                pass  # ignorerar raden
+                pass
             else:
                 rows.append(processed)
     return rows
@@ -289,7 +281,6 @@ filtered_df = combined_df.copy()
 
 if week_filter_set:
     try:
-        # Ta bort prefix "📅 Vecka " och konvertera till int
         filtered_df["WeekInt"] = filtered_df["Vecka"].str.replace("📅 Vecka", "").str.strip().apply(lambda x: int(x) if x.isdigit() else None)
         filtered_df = filtered_df.dropna(subset=["WeekInt"])
         filtered_df = filtered_df[filtered_df["WeekInt"].isin(week_filter_set)]
@@ -300,7 +291,6 @@ if price_filter_value > 0:
     filtered_df = filtered_df[filtered_df["PriceInt"] <= (price_filter_value + 500)]
 if restid_active:
     def passes_restid(row):
-        # Ta bort eventuellt prefix "📍 " från Ort
         ort = row["Ort"].replace("📍", "").strip().lower()
         if ort == "eskilstuna":
             travel_time = get_travel_time(user_location.strip(), user_transport)
@@ -309,7 +299,6 @@ if restid_active:
             return True
     filtered_df = filtered_df[filtered_df.apply(passes_restid, axis=1)]
 
-# Om inga filter anges, visa de kommande 2 veckornas kurser (baserat på nuvarande vecka)
 if not (week_filter_set or price_filter_value > 0 or restid_active):
     current_week = datetime.datetime.now().isocalendar()[1]
     allowed_weeks = {current_week + 1, current_week + 2}
@@ -321,7 +310,7 @@ if not (week_filter_set or price_filter_value > 0 or restid_active):
         pass
 
 ####################################
-# Visa resultat i 3 kolumner (kombinerad data)
+# Visa kurser i 3 kolumner (kombinerad data)
 ####################################
 st.subheader("🔍 Välj kurser (UGL + Rezon)")
 courses = list(filtered_df.iterrows())
@@ -342,7 +331,8 @@ for i in range(0, len(courses), 3):
               📍 <strong>{row["Ort"]}</strong><br>
               💰 <strong>{row["Pris"]}</strong> &nbsp; {spots_html}<br>
               👥 <strong>{row["Handledare1"]}</strong><br>
-              👥 <strong>{row["Handledare2"]}</strong>
+              👥 <strong>{row["Handledare2"]}</strong><br>
+              <em>Källa: {row.get("Källa", "")}</em>
             </div>
             """
             st.markdown(block, unsafe_allow_html=True)
@@ -366,9 +356,7 @@ if st.button("Visa Fullständig kurslista"):
 st.subheader("Skicka information om dina valda kurser")
 if st.button("Skicka information via mail"):
     if selected_courses and mail.strip():
-        # Hämta det aktuella slumpmässiga ID:t
         request_id = st.session_state.random_id
-        # Efter mailutskicket, generera ett nytt ID
         st.session_state.random_id = generate_random_id()
         table_html = f"""
         Hej {namn},<br>
@@ -413,3 +401,32 @@ if st.button("Skicka information via mail"):
         )
     else:
         st.warning("Vänligen välj minst en kurs och ange din mailadress.")
+
+####################################
+# Visa rådata från Rezon (som lista)
+####################################
+st.subheader("Rådata från Rezon (skrapad och processad)")
+@st.cache_data
+def fetch_rezon_table_data():
+    url = "https://rezon.se/kurskategorier/ugl/"
+    response = requests.get(url)
+    soup = BeautifulSoup(response.content, "html.parser")
+    table = soup.find("table")
+    if not table:
+        return []
+    headers = [th.get_text(strip=True) for th in table.find("tr").find_all("th")]
+    rows = []
+    for tr in table.find_all("tr")[1:]:
+        cells = [td.get_text(strip=True) for td in tr.find_all("td")]
+        if cells:
+            row_dict = dict(zip(headers, cells))
+            processed = process_rezon_row(row_dict)
+            rows.append(processed)
+    return rows
+
+rezon_list = fetch_rezon_table_data()
+if rezon_list:
+    for r in rezon_list:
+        st.markdown(f"- **Datum:** {r['Datum']}, {r['Vecka']}, **Anläggning:** {r['Anläggning']}, **Ort:** {r['Ort']}, **Handledare:** {r['Handledare1']} / {r['Handledare2']}, **Pris:** {r['Pris']}, **Platser kvar:** {r['Platser kvar']}, **Källa:** {r.get('Källa', '')}")
+else:
+    st.write("Ingen data hittades från Rezon.")
