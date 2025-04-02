@@ -5,50 +5,43 @@ import pandas as pd
 import re
 import datetime
 import urllib.parse
+import random
+import string
 
 st.set_page_config(page_title="UGL Kurser", page_icon="📅")
 st.title("UGL Kurser – Datum och priser")
 
-# Initiera request counter i session_state (om den inte redan finns)
-if "request_counter" not in st.session_state:
-    st.session_state.request_counter = 1
+# Funktion för att generera ett slumpmässigt ID (6 tecken, bokstäver + siffror)
+def generate_random_id(length=6):
+    characters = string.ascii_uppercase + string.digits
+    return ''.join(random.choices(characters, k=length))
+
+# Initiera ID i session_state om det inte finns
+if "random_id" not in st.session_state:
+    st.session_state.random_id = generate_random_id()
 
 #############################
 # SIDOPANEL: Kontaktuppgifter
 #############################
 
 st.sidebar.header("Kontaktuppgifter")
-
-# Rad 1: Namn och Telefon
 col_namn, col_tel = st.sidebar.columns(2)
 namn = col_namn.text_input("Namn")
 telefon = col_tel.text_input("Telefon")
-
-# Rad 2: Mail
 mail = st.sidebar.text_input("Mail")
-
-# Rad 3: Automatiskt ID (visas men kan inte ändras)
-request_id = st.session_state.request_counter
-st.sidebar.text_input("ID", value=str(request_id), disabled=True)
+st.sidebar.text_input("ID", value=st.session_state.random_id, disabled=True)
 
 #############################
 # SIDOPANEL: Filter
 #############################
 
 st.sidebar.header("Filter")
-
-# Rad 1: Vecka och Max Pris
 col_vecka, col_pris = st.sidebar.columns(2)
-week_filter_input = col_vecka.text_input("Vecka (35-37)")
+week_filter_input = col_vecka.text_input("Vecka (t.ex. 15,7 eller 35-37)")
 price_filter_input = col_pris.number_input("Max Pris (kr)", min_value=0, value=0, step=100)
 
-# Restid
 st.sidebar.subheader("Restid")
-
-# Rad 1: Plats
 user_location = st.sidebar.text_input("Plats (din plats)")
-
-# Rad 2: Färdsätt och restid
 col_far, col_res = st.sidebar.columns(2)
 user_transport = col_far.selectbox("Färdsätt", options=["Bil", "Kollektivt"])
 user_restid = col_res.number_input("Restid (timmar)", min_value=0, value=0, step=1)
@@ -58,7 +51,6 @@ user_restid = col_res.number_input("Restid (timmar)", min_value=0, value=0, step
 #############################
 
 def parse_week_filter(week_str):
-    """Parsa veckofiltreringssträngen till en mängd heltal."""
     allowed = set()
     if not week_str.strip():
         return allowed
@@ -81,20 +73,9 @@ def parse_week_filter(week_str):
     return allowed
 
 def get_travel_time(user_city, mode):
-    """Simulerad restid (i timmar) från en användarstad till Eskilstuna."""
     travel_times = {
-        "Bil": {
-            "Västerås": 1.0,
-            "Kiruna": 6.0,
-            "Eskilstuna": 0.0,
-            "Stockholm": 1.5,
-        },
-        "Kollektivt": {
-            "Västerås": 2.0,
-            "Kiruna": 8.0,
-            "Eskilstuna": 0.0,
-            "Stockholm": 2.5,
-        }
+        "Bil": {"Västerås": 1.0, "Kiruna": 6.0, "Eskilstuna": 0.0, "Stockholm": 1.5},
+        "Kollektivt": {"Västerås": 2.0, "Kiruna": 8.0, "Eskilstuna": 0.0, "Stockholm": 2.5},
     }
     if mode in travel_times and user_city in travel_times[mode]:
         return travel_times[mode][user_city]
@@ -102,28 +83,18 @@ def get_travel_time(user_city, mode):
         return 99.0
 
 def extract_price(price_str):
-    """Extrahera numeriskt värde ur prissträngen (t.ex. '26 300 kr')."""
     try:
         return int(re.sub(r'\D', '', price_str))
     except:
         return 0
 
 def add_space_between_words(text):
-    """Lägg in mellanslag där ihopklistrade ord förekommer (t.ex. 'PatriciaStahl')."""
     return re.sub(r'(?<=[a-zåäö])(?=[A-ZÅÄÖ])', ' ', text)
 
 def shorten_year(datum):
-    """
-    Ändra årtal från 4-siffrigt till 2-siffrigt i datumsträngen.
-    Exempel: "07 Apr - 11 Apr 2025" → "07 Apr - 11 Apr 25"
-    """
     return re.sub(r'(\d{2} \w{3} - \d{2} \w{3} )\d{2}(\d{2})', r'\1\2', datum)
 
 def format_course_date(datum):
-    """
-    Omvandlar t.ex. "12 Maj - 16 Maj 2025" till "12/5 - 16/5 25".
-    Justeras efter önskemål.
-    """
     month_mapping = {
         "Jan": "1", "Feb": "2", "Mar": "3", "Apr": "4", "Maj": "5",
         "Jun": "6", "Jul": "7", "Aug": "8", "Sep": "9", "Okt": "10",
@@ -144,13 +115,6 @@ def format_course_date(datum):
         return datum
 
 def format_spots(spots):
-    """
-    Returnerar en HTML-sträng med en färgad ✅ beroende på antalet platser kvar.
-    - Grönt om numeriskt värde >= 3
-    - Orange om "Få" eller numeriskt < 3
-    - Rött om "fullbokad" finns i texten
-    Efter ikonen visas texten (i svart).
-    """
     text = spots.strip()
     if "fullbokad" in text.lower():
         color = "red"
@@ -163,10 +127,7 @@ def format_spots(spots):
                 color = "orange"
             else:
                 num = int(digits)
-                if num < 3:
-                    color = "orange"
-                else:
-                    color = "green"
+                color = "green" if num >= 3 else "orange"
         except:
             color = "orange"
     return f'<span style="color: {color}; font-weight: bold;">✅</span> {text}'
@@ -181,9 +142,8 @@ URL = "https://www.uglkurser.se/datumochpriser.php"
 def fetch_ugl_data():
     response = requests.get(URL)
     soup = BeautifulSoup(response.content, "html.parser")
-    
     table = soup.find("table")
-    rows = table.find_all("tr")[1:]  # Hoppa över header
+    rows = table.find_all("tr")[1:]
     
     data = []
     for row in rows:
@@ -191,13 +151,11 @@ def fetch_ugl_data():
         if len(cols) < 4:
             continue
         
-        # Kursdatum & Vecka
         kursdatum_rader = list(cols[0].stripped_strings)
         datum = kursdatum_rader[0] if len(kursdatum_rader) > 0 else ""
         datum = format_course_date(datum)
         vecka = kursdatum_rader[1].replace("Vecka", "").strip() if len(kursdatum_rader) > 1 else ""
         
-        # Kursplats
         kursplats_rader = list(cols[1].stripped_strings)
         anlaggning_och_ort = kursplats_rader[0] if len(kursplats_rader) > 0 else ""
         anlaggning_split = anlaggning_och_ort.split(",")
@@ -208,12 +166,10 @@ def fetch_ugl_data():
         if len(kursplats_rader) > 1 and "Platser kvar:" in kursplats_rader[1]:
             platser_kvar = kursplats_rader[1].split("Platser kvar:")[1].strip()
         
-        # Kursledare
         kursledare_rader = list(cols[2].stripped_strings)
         kursledare1 = add_space_between_words(kursledare_rader[0]) if len(kursledare_rader) > 0 else ""
         kursledare2 = add_space_between_words(kursledare_rader[1]) if len(kursledare_rader) > 1 else ""
         
-        # Pris
         pris_rader = list(cols[3].stripped_strings)
         pris = pris_rader[0] if len(pris_rader) > 0 else ""
         
@@ -239,7 +195,6 @@ df = fetch_ugl_data()
 week_filter_set = parse_week_filter(week_filter_input)
 price_filter_value = int(price_filter_input) if price_filter_input else 0
 restid_active = user_location.strip() != "" and user_restid > 0
-
 filter_active = bool(week_filter_set or price_filter_value > 0 or restid_active)
 filtered_df = df.copy()
 
@@ -286,83 +241,3 @@ for i in range(0, len(courses), 3):
             <div style="margin-bottom: 1em;">
               <span style="white-space: nowrap;">
                 📅 <strong>Vecka {row["Vecka"]}</strong> &nbsp; 
-                <strong>{row["Datum"]}</strong>
-              </span><br>
-              🏨 <strong>{row["Anläggning"]}</strong><br>
-              📍 <strong>{row["Ort"]}</strong><br>
-              💰 <strong>{row["Pris"]}</strong> &nbsp; {spots_html}<br>
-              👥 <strong>{row["Kursledare1"]}</strong><br>
-              👥 <strong>{row["Kursledare2"]}</strong>
-            </div>
-            """
-            st.markdown(block, unsafe_allow_html=True)
-            if st.checkbox("Välj denna kurs", key=f"val_{idx}"):
-                selected_courses.append(row)
-
-if selected_courses:
-    st.subheader("✅ Du har valt följande kurser:")
-    st.dataframe(pd.DataFrame(selected_courses), use_container_width=True)
-
-#############################
-# Visa fullständig kurslista
-#############################
-
-if st.button("Visa Fullständig kurslista"):
-    st.subheader("📋 Fullständig kurslista")
-    st.dataframe(filtered_df, use_container_width=True)
-
-#############################
-# Skicka via mail med HTML
-#############################
-
-st.subheader("Skicka information om dina valda kurser")
-if st.button("Skicka information via mail"):
-    if selected_courses and mail.strip():
-        # Generera ett automatiskt förfrågnings-ID
-        request_id = st.session_state.request_counter
-        st.session_state.request_counter += 1
-
-        table_html = f"""
-        Hej {namn},<br>
-        Namn: {namn} &nbsp;&nbsp; Telefon: {telefon}<br>
-        Förfrågan ID: {request_id}<br><br>
-        Här kommer dina valda kurser:<br><br>
-        <table border="1" style="border-collapse: collapse;">
-          <tr>
-            <th>Vecka & Pris</th>
-            <th>Datum</th>
-            <th>Anläggning</th>
-            <th>Ort</th>
-          </tr>
-        """
-        for course in selected_courses:
-            table_html += f"""
-          <tr>
-            <td>Vecka {course['Vecka']}<br>Pris: {course['Pris']}</td>
-            <td>{course['Datum']}</td>
-            <td>{course['Anläggning']}</td>
-            <td>{course['Ort']}</td>
-          </tr>
-            """
-        table_html += """
-        </table>
-        <br>
-        Hälsningar,<br>
-        Ditt Företag
-        """
-
-        # Ersätt radbrytningar med mellanslag för en enradig sträng
-        table_html_single = table_html.replace("\n", "").replace("\r", "")
-        subject = f"Valda kurser - Förfrågan ID: {request_id}"
-        mailto_link = (
-            f"mailto:{mail}"
-            f"?subject={urllib.parse.quote(subject)}"
-            f"&body={urllib.parse.quote(table_html_single)}"
-        )
-        st.markdown(
-            f"**Klicka [här]({mailto_link}) för att skicka ett mail med dina valda kurser.**<br>"
-            f"<em>OBS! Alla e-postklienter visar inte HTML korrekt.</em>",
-            unsafe_allow_html=True
-        )
-    else:
-        st.warning("Vänligen välj minst en kurs och ange din mailadress.")
