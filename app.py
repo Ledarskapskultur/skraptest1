@@ -90,10 +90,10 @@ def shorten_year(datum):
 
 def format_spots(spots):
     """
-    Returnerar en HTML-sträng med färg beroende på antalet platser kvar.
-    Grönt: 3+ (eller numeriskt ≥ 3)
-    Orange: "Få" eller numeriskt mindre än 3
-    Rött: Om texten innehåller "fullbokad"
+    Returnerar en HTML-sträng med en färgad ikon och sedan texten (ofärgad).
+    - Grönt om antalet platser är 3 eller fler.
+    - Orange om det är "Få" eller numeriskt mindre än 3.
+    - Rött om texten innehåller "fullbokad".
     """
     if "fullbokad" in spots.lower():
         color = "red"
@@ -110,7 +110,7 @@ def format_spots(spots):
                     color = "green"
         except:
             color = "orange"
-    return f'<span style="color: {color}; font-weight: bold;">{spots}</span>'
+    return f'<span style="color: {color};">✅</span> <span style="color: black;">{spots}</span>'
 
 # Hämtning och tolkning av kursdata
 
@@ -222,7 +222,7 @@ for i, row in filtered_df.head(9).iterrows():
     col = cols[i % 3]
     with col:
         st.markdown("---")
-        # Använd format_spots() för att visa platsinformationen med färg.
+        # Använd format_spots() för att visa platsinformationen med färgad ikon (✅) och svart text för värdet.
         spots_html = format_spots(row["Platser kvar"])
         block = f"""
         <div style="margin-bottom: 1em;">
@@ -232,8 +232,7 @@ for i, row in filtered_df.head(9).iterrows():
           </span><br>
           🏨 <strong>{row["Anläggning"]}</strong><br>
           📍 <strong>{row["Ort"]}</strong><br>
-          💰 <strong>{row["Pris"]}</strong> &nbsp; 
-          ✅ <strong>Platser kvar: {spots_html}</strong><br>
+          💰 <strong>{row["Pris"]}</strong> &nbsp; {spots_html}<br>
           👥 <strong>{row["Kursledare1"]}</strong><br>
           👥 <strong>{row["Kursledare2"]}</strong>
         </div>
