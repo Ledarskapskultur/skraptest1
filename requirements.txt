@@ -1,3 +1,4 @@
+selenium
 streamlit
 requests
 beautifulsoup4
