@@ -267,7 +267,7 @@ if st.button("Visa Fullständig kurslista"):
     st.subheader("📋 Fullständig kurslista")
     st.dataframe(filtered_df, use_container_width=True)
 
-# Skicka information via mail (HTML-tabell)
+# Möjlighet att skicka information via mail (HTML-tabell)
 st.subheader("Skicka information om dina valda kurser")
 if st.button("Skicka information via mail"):
     if selected_courses and mail.strip():
@@ -292,12 +292,14 @@ if st.button("Skicka information via mail"):
             </tr>
             """
         table_html += "</table>"
-        
+        # Ta bort onödiga radbrytningar så att tabellen blir en enradig sträng
+        table_html_single = " ".join(table_html.split())
         subject = "Valda kurser"
-        mailto_link = f"mailto:{mail}?subject={urllib.parse.quote(subject)}&body={urllib.parse.quote(table_html)}"
+        mailto_link = f"mailto:{mail}?subject={urllib.parse.quote(subject)}&body={urllib.parse.quote(table_html_single)}"
         st.markdown(
             f"**Klicka [här]({mailto_link}) för att skicka ett mail med dina valda kurser.**<br><em>OBS! Alla e-postklienter visar inte HTML korrekt.</em>",
             unsafe_allow_html=True
         )
     else:
         st.warning("Vänligen välj minst en kurs och ange din mailadress.")
+
