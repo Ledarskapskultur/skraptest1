@@ -51,6 +51,7 @@ user_restid = col_res.number_input("Restid (timmar)", min_value=0, value=0, step
 #############################
 
 def parse_week_filter(week_str):
+    """Parsa veckofiltreringssträngen till en mängd heltal."""
     allowed = set()
     if not week_str.strip():
         return allowed
@@ -73,9 +74,20 @@ def parse_week_filter(week_str):
     return allowed
 
 def get_travel_time(user_city, mode):
+    """Simulerad restid (i timmar) från en användarstad till Eskilstuna."""
     travel_times = {
-        "Bil": {"Västerås": 1.0, "Kiruna": 6.0, "Eskilstuna": 0.0, "Stockholm": 1.5},
-        "Kollektivt": {"Västerås": 2.0, "Kiruna": 8.0, "Eskilstuna": 0.0, "Stockholm": 2.5},
+        "Bil": {
+            "Västerås": 1.0,
+            "Kiruna": 6.0,
+            "Eskilstuna": 0.0,
+            "Stockholm": 1.5,
+        },
+        "Kollektivt": {
+            "Västerås": 2.0,
+            "Kiruna": 8.0,
+            "Eskilstuna": 0.0,
+            "Stockholm": 2.5,
+        }
     }
     if mode in travel_times and user_city in travel_times[mode]:
         return travel_times[mode][user_city]
@@ -83,18 +95,28 @@ def get_travel_time(user_city, mode):
         return 99.0
 
 def extract_price(price_str):
+    """Extrahera numeriskt värde ur prissträngen (t.ex. '26 300 kr')."""
     try:
         return int(re.sub(r'\D', '', price_str))
     except:
         return 0
 
 def add_space_between_words(text):
+    """Lägg in mellanslag där ihopklistrade ord förekommer (t.ex. 'PatriciaStahl')."""
     return re.sub(r'(?<=[a-zåäö])(?=[A-ZÅÄÖ])', ' ', text)
 
 def shorten_year(datum):
+    """
+    Ändra årtal från 4-siffrigt till 2-siffrigt i datumsträngen.
+    Exempel: "07 Apr - 11 Apr 2025" → "07 Apr - 11 Apr 25"
+    """
     return re.sub(r'(\d{2} \w{3} - \d{2} \w{3} )\d{2}(\d{2})', r'\1\2', datum)
 
 def format_course_date(datum):
+    """
+    Omvandlar t.ex. "12 Maj - 16 Maj 2025" till "12/5 - 16/5 25".
+    Justeras efter önskemål.
+    """
     month_mapping = {
         "Jan": "1", "Feb": "2", "Mar": "3", "Apr": "4", "Maj": "5",
         "Jun": "6", "Jul": "7", "Aug": "8", "Sep": "9", "Okt": "10",
@@ -115,6 +137,13 @@ def format_course_date(datum):
         return datum
 
 def format_spots(spots):
+    """
+    Returnerar en HTML-sträng med en färgad ✅ beroende på antalet platser kvar.
+    - Grönt om numeriskt värde >= 3
+    - Orange om "Få" eller numeriskt < 3
+    - Rött om "fullbokad" finns i texten
+    Efter ikonen visas texten (i svart).
+    """
     text = spots.strip()
     if "fullbokad" in text.lower():
         color = "red"
@@ -142,8 +171,9 @@ URL = "https://www.uglkurser.se/datumochpriser.php"
 def fetch_ugl_data():
     response = requests.get(URL)
     soup = BeautifulSoup(response.content, "html.parser")
+    
     table = soup.find("table")
-    rows = table.find_all("tr")[1:]
+    rows = table.find_all("tr")[1:]  # Hoppa över header
     
     data = []
     for row in rows:
@@ -151,11 +181,13 @@ def fetch_ugl_data():
         if len(cols) < 4:
             continue
         
+        # Kursdatum & Vecka
         kursdatum_rader = list(cols[0].stripped_strings)
         datum = kursdatum_rader[0] if len(kursdatum_rader) > 0 else ""
         datum = format_course_date(datum)
         vecka = kursdatum_rader[1].replace("Vecka", "").strip() if len(kursdatum_rader) > 1 else ""
         
+        # Kursplats
         kursplats_rader = list(cols[1].stripped_strings)
         anlaggning_och_ort = kursplats_rader[0] if len(kursplats_rader) > 0 else ""
         anlaggning_split = anlaggning_och_ort.split(",")
@@ -166,10 +198,12 @@ def fetch_ugl_data():
         if len(kursplats_rader) > 1 and "Platser kvar:" in kursplats_rader[1]:
             platser_kvar = kursplats_rader[1].split("Platser kvar:")[1].strip()
         
+        # Kursledare
         kursledare_rader = list(cols[2].stripped_strings)
         kursledare1 = add_space_between_words(kursledare_rader[0]) if len(kursledare_rader) > 0 else ""
         kursledare2 = add_space_between_words(kursledare_rader[1]) if len(kursledare_rader) > 1 else ""
         
+        # Pris
         pris_rader = list(cols[3].stripped_strings)
         pris = pris_rader[0] if len(pris_rader) > 0 else ""
         
@@ -273,9 +307,9 @@ if st.button("Visa Fullständig kurslista"):
 st.subheader("Skicka information om dina valda kurser")
 if st.button("Skicka information via mail"):
     if selected_courses and mail.strip():
-        # Hämta det aktuella ID:t från session_state
+        # Hämta det aktuella slumpmässiga ID:t från session_state
         request_id = st.session_state.random_id
-        # Efter att mail skickats generera ett nytt ID för nästa gång
+        # Efter att mailet skickats generera ett nytt ID
         st.session_state.random_id = generate_random_id()
 
         table_html = f"""
@@ -321,3 +355,17 @@ if st.button("Skicka information via mail"):
         )
     else:
         st.warning("Vänligen välj minst en kurs och ange din mailadress.")
+
+#############################
+# Rådata från Rezon
+#############################
+
+st.subheader("Rådata från Rezon")
+with st.expander("Visa rådata från https://rezon.se/kurskategorier/ugl/"):
+    @st.cache_data
+    def fetch_rezon_data():
+        url = "https://rezon.se/kurskategorier/ugl/"
+        response = requests.get(url)
+        return response.text
+    raw_rezon = fetch_rezon_data()
+    st.code(raw_rezon, language="html")
