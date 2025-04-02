@@ -81,12 +81,31 @@ def add_space_between_words(text):
     """Lägg in mellanslag där ihopklistrade ord förekommer (t.ex. 'PatriciaStahl')."""
     return re.sub(r'(?<=[a-zåäö])(?=[A-ZÅÄÖ])', ' ', text)
 
-def shorten_year(datum):
+def format_course_date(datum):
     """
-    Ändra årtal från 4-siffrigt till 2-siffrigt i datumsträngen.
-    Exempel: "07 Apr - 11 Apr 2025" → "07 Apr - 11 Apr 25"
+    Formatera datumsträngen från formatet "DD Mmm - DD Mmm YYYY" 
+    till "DD/m - DD/m YY".
+    
+    Exempel: "12 Maj - 16 Maj 2025" → "12/5 - 16/5 25"
     """
-    return re.sub(r'(\d{2} \w{3} - \d{2} \w{3} )\d{2}(\d{2})', r'\1\2', datum)
+    month_mapping = {
+        "Jan": "1", "Feb": "2", "Mar": "3", "Apr": "4", "Maj": "5",
+        "Jun": "6", "Jul": "7", "Aug": "8", "Sep": "9", "Okt": "10",
+        "Nov": "11", "Dec": "12"
+    }
+    pattern = r"(\d{1,2})\s+([A-Za-z]+)\s*-\s*(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})"
+    match = re.search(pattern, datum)
+    if match:
+        start_day = match.group(1)
+        start_month = match.group(2)
+        end_day = match.group(3)
+        end_month = match.group(4)
+        year = match.group(5)
+        start_month_num = month_mapping.get(start_month, start_month)
+        end_month_num = month_mapping.get(end_month, end_month)
+        return f"{start_day}/{start_month_num} - {end_day}/{end_month_num} {year[-2:]}"
+    else:
+        return datum  # fallback om mönstret inte matchar
 
 def format_spots(spots):
     """
@@ -138,7 +157,7 @@ def fetch_ugl_data():
         # Kursdatum & Vecka
         kursdatum_rader = list(cols[0].stripped_strings)
         datum = kursdatum_rader[0] if len(kursdatum_rader) > 0 else ""
-        datum = shorten_year(datum)
+        datum = format_course_date(datum)
         vecka = kursdatum_rader[1].replace("Vecka", "").strip() if len(kursdatum_rader) > 1 else ""
         
         # Kursplats: Anläggning, Ort, Platser kvar
@@ -226,7 +245,7 @@ for i in range(0, len(courses), 3):
             <div style="margin-bottom: 1em;">
               <span style="white-space: nowrap;">
                 📅 <strong>Vecka {row["Vecka"]}</strong> &nbsp; 
-                📆 <strong>{row["Datum"]}</strong>
+                <strong>{row["Datum"]}</strong>
               </span><br>
               🏨 <strong>{row["Anläggning"]}</strong><br>
               📍 <strong>{row["Ort"]}</strong><br>
