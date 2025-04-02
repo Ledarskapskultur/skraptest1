@@ -76,18 +76,8 @@ def parse_week_filter(week_str):
 def get_travel_time(user_city, mode):
     """Simulerad restid (i timmar) från en användarstad till Eskilstuna."""
     travel_times = {
-        "Bil": {
-            "Västerås": 1.0,
-            "Kiruna": 6.0,
-            "Eskilstuna": 0.0,
-            "Stockholm": 1.5,
-        },
-        "Kollektivt": {
-            "Västerås": 2.0,
-            "Kiruna": 8.0,
-            "Eskilstuna": 0.0,
-            "Stockholm": 2.5,
-        }
+        "Bil": {"Västerås": 1.0, "Kiruna": 6.0, "Eskilstuna": 0.0, "Stockholm": 1.5},
+        "Kollektivt": {"Västerås": 2.0, "Kiruna": 8.0, "Eskilstuna": 0.0, "Stockholm": 2.5},
     }
     if mode in travel_times and user_city in travel_times[mode]:
         return travel_times[mode][user_city]
@@ -162,7 +152,7 @@ def format_spots(spots):
     return f'<span style="color: {color}; font-weight: bold;">✅</span> {text}'
 
 #############################
-# Hämtning av kursdata
+# Hämtning av kursdata (från UGL-sidan)
 #############################
 
 URL = "https://www.uglkurser.se/datumochpriser.php"
@@ -171,42 +161,30 @@ URL = "https://www.uglkurser.se/datumochpriser.php"
 def fetch_ugl_data():
     response = requests.get(URL)
     soup = BeautifulSoup(response.content, "html.parser")
-    
     table = soup.find("table")
     rows = table.find_all("tr")[1:]  # Hoppa över header
-    
     data = []
     for row in rows:
         cols = row.find_all("td")
         if len(cols) < 4:
             continue
-        
-        # Kursdatum & Vecka
         kursdatum_rader = list(cols[0].stripped_strings)
         datum = kursdatum_rader[0] if len(kursdatum_rader) > 0 else ""
         datum = format_course_date(datum)
         vecka = kursdatum_rader[1].replace("Vecka", "").strip() if len(kursdatum_rader) > 1 else ""
-        
-        # Kursplats
         kursplats_rader = list(cols[1].stripped_strings)
         anlaggning_och_ort = kursplats_rader[0] if len(kursplats_rader) > 0 else ""
         anlaggning_split = anlaggning_och_ort.split(",")
         anlaggning = anlaggning_split[0].strip()
         ort = anlaggning_split[1].strip() if len(anlaggning_split) > 1 else ""
-        
         platser_kvar = ""
         if len(kursplats_rader) > 1 and "Platser kvar:" in kursplats_rader[1]:
             platser_kvar = kursplats_rader[1].split("Platser kvar:")[1].strip()
-        
-        # Kursledare
         kursledare_rader = list(cols[2].stripped_strings)
         kursledare1 = add_space_between_words(kursledare_rader[0]) if len(kursledare_rader) > 0 else ""
         kursledare2 = add_space_between_words(kursledare_rader[1]) if len(kursledare_rader) > 1 else ""
-        
-        # Pris
         pris_rader = list(cols[3].stripped_strings)
         pris = pris_rader[0] if len(pris_rader) > 0 else ""
-        
         data.append({
             "Vecka": vecka,
             "Datum": datum,
@@ -217,7 +195,6 @@ def fetch_ugl_data():
             "Kursledare2": kursledare2,
             "Pris": pris
         })
-    
     return pd.DataFrame(data)
 
 df = fetch_ugl_data()
@@ -357,27 +334,31 @@ if st.button("Skicka information via mail"):
         st.warning("Vänligen välj minst en kurs och ange din mailadress.")
 
 #############################
-# Rådata från Rezon visad som lista
+# Skrapa och visa data från Rezon som en lista
 #############################
 
 st.subheader("Kurskategorier från Rezon")
 @st.cache_data
-def fetch_rezon_data():
+def fetch_rezon_table():
     url = "https://rezon.se/kurskategorier/ugl/"
     response = requests.get(url)
     soup = BeautifulSoup(response.content, "html.parser")
-    # Försök hitta en <ul> med klass "list-unstyled" (justera vid behov)
-    container = soup.find("ul", class_="list-unstyled")
-    if container:
-        items = container.find_all("li")
+    table = soup.find("table")
+    if table:
+        headers = [th.get_text(strip=True) for th in table.find("tr").find_all("th")]
+        rows = []
+        for tr in table.find_all("tr")[1:]:
+            cells = [td.get_text(strip=True) for td in tr.find_all("td")]
+            if cells:
+                row_dict = dict(zip(headers, cells))
+                rows.append(row_dict)
+        return rows
     else:
-        items = soup.find_all("li")
-    # Returnera en lista med textinnehåll från varje <li>
-    return [item.get_text(strip=True) for item in items if item.get_text(strip=True)]
+        return []
 
-rezon_list = fetch_rezon_data()
-if rezon_list:
-    for item in rezon_list:
-        st.markdown(f"- {item}")
+rezon_data = fetch_rezon_table()
+if rezon_data:
+    for row in rezon_data:
+        st.markdown(f"- **Kurs:** {row.get('Kurs', '')} | **Kursdatum:** {row.get('Kursdatum', '')} | **Utbildningsort:** {row.get('Utbildningsort', '')} | **Handledare:** {row.get('Handledare', '')} | **Pris:** {row.get('Pris', '')} | **Bokningsdetaljer:** {row.get('Bokningsdetaljer', '')}")
 else:
-    st.write("Ingen data hittades från Rezon.")
+    st.write("Ingen tabell hittades på Rezon-sidan.")
