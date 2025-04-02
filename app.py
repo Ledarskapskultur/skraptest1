@@ -2,11 +2,15 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
+import re
 
 st.set_page_config(page_title="UGL Kurser", page_icon="📅")
 st.title("UGL Kurser – Datum och priser")
 
 URL = "https://www.uglkurser.se/datumochpriser.php"
+
+def add_space_between_words(text):
+    return re.sub(r'(?<=[a-zåäö])(?=[A-ZÅÄÖ])', ' ', text)
 
 @st.cache_data
 def fetch_ugl_data():
@@ -20,11 +24,11 @@ def fetch_ugl_data():
     for row in rows:
         cols = row.find_all("td")
         if len(cols) >= 5:
-            vecka = cols[0].get_text(strip=True)
-            datum = cols[1].get_text(strip=True)
-            ort = cols[2].get_text(strip=True)
-            kursledare = cols[3].get_text(strip=True)
-            pris = cols[4].get_text(strip=True)
+            vecka = add_space_between_words(cols[0].get_text(strip=True))
+            datum = add_space_between_words(cols[1].get_text(strip=True))
+            ort = add_space_between_words(cols[2].get_text(strip=True))
+            kursledare = add_space_between_words(cols[3].get_text(strip=True))
+            pris = add_space_between_words(cols[4].get_text(strip=True))
             data.append({
                 "Vecka": vecka,
                 "Datum": datum,
