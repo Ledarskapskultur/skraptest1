@@ -24,6 +24,10 @@ user_location = st.sidebar.text_input("Plats (din plats)")
 user_transport = st.sidebar.selectbox("Färdsätt", options=["Bil", "Kollektivt"])
 user_restid = st.sidebar.number_input("Restid (timmar)", min_value=0, value=0, step=1)
 
+# Initiera request counter i session_state (om den inte redan finns)
+if "request_counter" not in st.session_state:
+    st.session_state.request_counter = 1
+
 # ---- Hjälpfunktioner ----
 
 def parse_week_filter(week_str):
@@ -84,14 +88,14 @@ def add_space_between_words(text):
 def shorten_year(datum):
     """
     Ändra årtal från 4-siffrigt till 2-siffrigt i datumsträngen.
-    Ex: "07 Apr - 11 Apr 2025" → "07 Apr - 11 Apr 25"
+    Exempel: "07 Apr - 11 Apr 2025" → "07 Apr - 11 Apr 25"
     """
     return re.sub(r'(\d{2} \w{3} - \d{2} \w{3} )\d{2}(\d{2})', r'\1\2', datum)
 
 def format_course_date(datum):
     """
     Omvandlar t.ex. "12 Maj - 16 Maj 2025" till "12/5 - 16/5 25".
-    Justeras efter önskemål om du vill ha ett annat format.
+    Justeras efter önskemål.
     """
     month_mapping = {
         "Jan": "1", "Feb": "2", "Mar": "3", "Apr": "4", "Maj": "5",
@@ -118,6 +122,7 @@ def format_spots(spots):
     - Grönt om numeriskt värde >= 3
     - Orange om "Få" eller numeriskt < 3
     - Rött om "fullbokad" finns i texten
+    Efter ikonen visas texten (i svart).
     """
     text = spots.strip()
     if "fullbokad" in text.lower():
@@ -139,7 +144,7 @@ def format_spots(spots):
             color = "orange"
     return f'<span style="color: {color}; font-weight: bold;">✅</span> {text}'
 
-# ---- Hämtning av data ----
+# ---- Hämtning av kursdata ----
 
 URL = "https://www.uglkurser.se/datumochpriser.php"
 
@@ -149,7 +154,7 @@ def fetch_ugl_data():
     soup = BeautifulSoup(response.content, "html.parser")
     
     table = soup.find("table")
-    rows = table.find_all("tr")[1:]  # Skippa header
+    rows = table.find_all("tr")[1:]  # Hoppa över header
     
     data = []
     for row in rows:
@@ -160,9 +165,7 @@ def fetch_ugl_data():
         # Kursdatum & Vecka
         kursdatum_rader = list(cols[0].stripped_strings)
         datum = kursdatum_rader[0] if len(kursdatum_rader) > 0 else ""
-        # Valfri formatering av datum
-        datum = format_course_date(datum)  
-        
+        datum = format_course_date(datum)
         vecka = kursdatum_rader[1].replace("Vecka", "").strip() if len(kursdatum_rader) > 1 else ""
         
         # Kursplats
@@ -179,9 +182,7 @@ def fetch_ugl_data():
         # Kursledare
         kursledare_rader = list(cols[2].stripped_strings)
         kursledare1 = add_space_between_words(kursledare_rader[0]) if len(kursledare_rader) > 0 else ""
-        kursledare2 = ""
-        if len(kursledare_rader) > 1:
-            kursledare2 = add_space_between_words(kursledare_rader[1])
+        kursledare2 = add_space_between_words(kursledare_rader[1]) if len(kursledare_rader) > 1 else ""
         
         # Pris
         pris_rader = list(cols[3].stripped_strings)
@@ -212,17 +213,14 @@ filter_active = bool(week_filter_set or price_filter_value > 0 or restid_active)
 filtered_df = df.copy()
 
 if filter_active:
-    # Veckofiltrering
     if week_filter_set:
         try:
             filtered_df = filtered_df[filtered_df["Vecka"].astype(int).isin(week_filter_set)]
         except Exception as e:
             st.error("Fel vid filtrering av vecka: " + str(e))
-    # Prisfiltrering (pris <= maxpris + 500)
     if price_filter_value > 0:
         filtered_df["PriceInt"] = filtered_df["Pris"].apply(extract_price)
         filtered_df = filtered_df[filtered_df["PriceInt"] <= (price_filter_value + 500)]
-    # Restidsfiltrering (Ort == Eskilstuna)
     if restid_active:
         def passes_restid(row):
             if row["Ort"].lower() == "eskilstuna":
@@ -232,7 +230,6 @@ if filter_active:
                 return True
         filtered_df = filtered_df[filtered_df.apply(passes_restid, axis=1)]
 else:
-    # Om inga filter -> visa de kommande 2 veckornas kurser
     current_week = datetime.datetime.now().isocalendar()[1]
     allowed_weeks = {current_week + 1, current_week + 2}
     try:
@@ -240,10 +237,9 @@ else:
     except:
         pass
 
-# ---- Visa resultat i 3 kolumner ----
+# ---- Visa alla kurser i rader med 3 per rad ----
 
 st.subheader("🔍 Välj kurser")
-
 courses = list(filtered_df.iterrows())
 selected_courses = []
 
@@ -280,53 +276,52 @@ if st.button("Visa Fullständig kurslista"):
     st.subheader("📋 Fullständig kurslista")
     st.dataframe(filtered_df, use_container_width=True)
 
-# ---- Skicka via mail (HTML) ----
+# ---- Skicka via mail med HTML (med ID under kontaktinfo) ----
 
 st.subheader("Skicka information om dina valda kurser")
-
 if st.button("Skicka information via mail"):
     if selected_courses and mail.strip():
-        # Skapa en HTML-tabell
+        # Generera ett automatiskt förfrågnings-ID
+        request_id = st.session_state.request_counter
+        st.session_state.request_counter += 1
+
         table_html = f"""
-Hej {namn},<br><br>
-Här kommer dina valda kurser:<br><br>
-<table border="1" style="border-collapse: collapse;">
-  <tr>
-    <th>Vecka</th>
-    <th>Datum</th>
-    <th>Anläggning</th>
-    <th>Ort</th>
-    <th>Pris</th>
-  </tr>
-"""
+        Hej {namn},<br>
+        Namn: {namn} &nbsp;&nbsp; Telefon: {telefon}<br>
+        Förfrågan ID: {request_id}<br><br>
+        Här kommer dina valda kurser:<br><br>
+        <table border="1" style="border-collapse: collapse;">
+          <tr>
+            <th>Vecka & Pris</th>
+            <th>Datum</th>
+            <th>Anläggning</th>
+            <th>Ort</th>
+          </tr>
+        """
         for course in selected_courses:
             table_html += f"""
-  <tr>
-    <td>{course['Vecka']}</td>
-    <td>{course['Datum']}</td>
-    <td>{course['Anläggning']}</td>
-    <td>{course['Ort']}</td>
-    <td>{course['Pris']}</td>
-  </tr>
-"""
+          <tr>
+            <td>Vecka {course['Vecka']}<br>Pris: {course['Pris']}</td>
+            <td>{course['Datum']}</td>
+            <td>{course['Anläggning']}</td>
+            <td>{course['Ort']}</td>
+          </tr>
+            """
         table_html += """
-</table>
-<br>
-Hälsningar,<br>
-Ditt Företag
-"""
+        </table>
+        <br>
+        Hälsningar,<br>
+        Ditt Företag
+        """
 
-        # Ersätt radbrytningar med %0D%0A för bättre mailto-kompatibilitet
-        # och se till att det är en enradig sträng (blir snyggare i HTML).
+        # Ersätt radbrytningar med mellanslag för en enradig sträng
         table_html_single = table_html.replace("\n", "").replace("\r", "")
-        subject = "Valda kurser"
-        
+        subject = f"Valda kurser - Förfrågan ID: {request_id}"
         mailto_link = (
             f"mailto:{mail}"
             f"?subject={urllib.parse.quote(subject)}"
             f"&body={urllib.parse.quote(table_html_single)}"
         )
-        
         st.markdown(
             f"**Klicka [här]({mailto_link}) för att skicka ett mail med dina valda kurser.**<br>"
             f"<em>OBS! Alla e-postklienter visar inte HTML korrekt.</em>",
