@@ -39,7 +39,7 @@ st.sidebar.header("Filter")
 
 # Rad 1: Vecka och Max Pris
 col_vecka, col_pris = st.sidebar.columns(2)
-week_filter_input = col_vecka.text_input("Vecka (t.ex. 15,7 eller 35-37)")
+week_filter_input = col_vecka.text_input("Vecka (t.ex.7,15 alt 35-37)")
 price_filter_input = col_pris.number_input("Max Pris (kr)", min_value=0, value=0, step=100)
 
 # Restid
