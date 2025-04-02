@@ -7,6 +7,11 @@ import datetime
 import urllib.parse
 import random
 import string
+import time
+
+# Importera Selenium
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 
 st.set_page_config(page_title="UGL Kurser", page_icon="📅")
 st.title("UGL Kurser – Datum och priser")
@@ -69,10 +74,11 @@ def parse_week_filter(week_str):
                 pass
     return allowed
 
-# Restid: Baserat på kundens plats och kursens ort (båda i gemener)
 def get_travel_time(customer, course, mode):
-    # Förenklad rese-dictionary (kan utökas)
-    # Vi definierar endast restid till "eskilstuna"
+    """
+    Returnerar restid baserat på kundens plats och kursens ort (båda i gemener).
+    Exempel: Om kursens ort är "eskilstuna" används våra tider.
+    """
     times = {
         "Bil": {
             "västerås": {"eskilstuna": 1.0},
@@ -101,7 +107,6 @@ def extract_price(price_str):
         return 0
 
 def add_space_between_words(text):
-    # Infogar mellanslag där en liten bokstav följs av en stor
     return re.sub(r'(?<=[a-zåäö])(?=[A-ZÅÄÖ])', ' ', text)
 
 def format_spots(spots):
@@ -120,7 +125,7 @@ def format_spots(spots):
     return f'<span style="color: {color}; font-weight: bold;">✅</span> {text}'
 
 def format_course_date(datum):
-    # Omvandlar "YYYY-MM-DD - YYYY-MM-DD" till "DD/M - DD/M YY"
+    """Omvandlar 'YYYY-MM-DD - YYYY-MM-DD' till 'DD/M - DD/M YY'."""
     parts = datum.split(" - ")
     if len(parts) == 2:
         try:
@@ -138,7 +143,7 @@ def combine_handledare(h1, h2):
         return h1 or h2
 
 ####################################
-# 5) Hämta UGL-data
+# 5) Hämta UGL-data (med requests)
 ####################################
 UGL_URL = "https://www.uglkurser.se/datumochpriser.php"
 
@@ -186,7 +191,7 @@ def fetch_ugl_data():
 ugl_df = fetch_ugl_data()
 
 ####################################
-# 6) Hämta Rezon-data
+# 6) Hämta Rezon-data (med requests)
 ####################################
 def process_rezon_row(row_dict):
     kursdatum = row_dict.get("Kursdatum", "")
@@ -263,12 +268,21 @@ rezon_list = fetch_rezon_data()
 rezon_df = pd.DataFrame(rezon_list)
 
 ####################################
-# 7) Hämta Corecode-data
+# 7) Hämta Corecode-data (med Selenium)
 ####################################
 def fetch_corecode_data():
     corecode_url = "https://www.corecode.se/oppna-utbildningar/ugl-utbildning?showall=true&filterBookables=-1"
-    resp = requests.get(corecode_url)
-    soup = BeautifulSoup(resp.content, "html.parser")
+    # Ställ in Chrome i headless-läge
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--disable-gpu")
+    driver = webdriver.Chrome(options=chrome_options)
+    driver.get(corecode_url)
+    # Vänta på att sidan laddats (justera vid behov)
+    time.sleep(3)
+    page_source = driver.page_source
+    driver.quit()
+    soup = BeautifulSoup(page_source, "html.parser")
     table = soup.find("table")
     if not table:
         return []
@@ -291,7 +305,6 @@ def fetch_corecode_data():
             plats = row_dict.get("Plats", "")
             if ":" in plats:
                 left, right = plats.split(":", 1)
-                # Vi tolkar vänstra delen som anläggning och högra som ort
                 anlaggning = left.strip()
                 ort = right.strip()
             else:
@@ -328,55 +341,34 @@ combined_df = pd.concat([ugl_df, rezon_df, corecode_df], ignore_index=True)
 
 week_filter_set = parse_week_filter(week_filter_input)
 price_filter_value = int(price_filter_input)
-# Restid-filter: jämför kundens plats och kursens ort
-def get_travel_time_pair(customer, course):
-    # Definiera rese-tider för transport till "eskilstuna" (exempel)
-    times = {
-        "Bil": {"västerås": {"eskilstuna": 1.0}, "kiruna": {"eskilstuna": 6.0},
-                "stockholm": {"eskilstuna": 1.5}, "eskilstuna": {"eskilstuna": 0.0}},
-        "Kollektivt": {"västerås": {"eskilstuna": 2.0}, "kiruna": {"eskilstuna": 8.0},
-                        "stockholm": {"eskilstuna": 2.5}, "eskilstuna": {"eskilstuna": 0.0}},
-    }
-    cust = customer.strip().lower()
-    crs = course.strip().lower()
-    try:
-        return times[user_transport][cust].get(crs, 99.0)
-    except:
-        return 99.0
-
-restid_active = user_location.strip() != "" and user_restid > 0
-filtered_df = combined_df.copy()
+def safe_week_int(v):
+    w = v.replace("📅 Vecka", "").strip()
+    return int(w) if w.isdigit() else None
 
 if week_filter_set:
-    try:
-        def safe_week_int(v):
-            w = v.replace("📅 Vecka", "").strip()
-            return int(w) if w.isdigit() else None
-        filtered_df["WeekInt"] = filtered_df["Vecka"].apply(safe_week_int)
-        filtered_df = filtered_df.dropna(subset=["WeekInt"])
-        filtered_df = filtered_df[filtered_df["WeekInt"].isin(week_filter_set)]
-    except Exception as e:
-        st.error(f"Fel vid filtrering av V: {e}")
+    combined_df["WeekInt"] = combined_df["Vecka"].apply(safe_week_int)
+    combined_df = combined_df.dropna(subset=["WeekInt"])
+    combined_df = combined_df[combined_df["WeekInt"].isin(week_filter_set)]
 if price_filter_value > 0:
-    filtered_df["PriceInt"] = filtered_df["Pris"].apply(extract_price)
-    filtered_df = filtered_df[filtered_df["PriceInt"] <= (price_filter_value + 500)]
-if restid_active:
-    def passes_restid(row):
-        # Använd kundens plats (user_location) och kursens Ort (utan prefix)
-        course_ort = row["Ort"].replace("📍", "").strip().lower()
-        customer = user_location.strip()
-        travel_time = get_travel_time_pair(customer, course_ort)
+    combined_df["PriceInt"] = combined_df["Pris"].apply(extract_price)
+    combined_df = combined_df[combined_df["PriceInt"] <= (price_filter_value + 500)]
+def passes_restid(row):
+    # Kundens plats är user_location, kursens ort (utan prefix "📍")
+    course_ort = row["Ort"].replace("📍", "").strip().lower()
+    if course_ort == "eskilstuna":
+        travel_time = get_travel_time(user_location.strip(), course_ort, user_transport)
         return travel_time <= user_restid
-    filtered_df = filtered_df[filtered_df.apply(passes_restid, axis=1)]
-if not (week_filter_set or price_filter_value or restid_active):
+    return True
+if user_location.strip() and user_restid > 0:
+    combined_df = combined_df[combined_df.apply(passes_restid, axis=1)]
+if not (week_filter_set or price_filter_value or (user_location.strip() and user_restid > 0)):
     current_week = datetime.datetime.now().isocalendar()[1]
     allowed_weeks = {current_week + 1, current_week + 2}
-    def safe_week_int(v):
-        w = v.replace("📅 Vecka", "").strip()
-        return int(w) if w.isdigit() else None
-    filtered_df["WeekInt"] = filtered_df["Vecka"].apply(safe_week_int)
-    filtered_df = filtered_df.dropna(subset=["WeekInt"])
-    filtered_df = filtered_df[filtered_df["WeekInt"].isin(allowed_weeks)]
+    combined_df["WeekInt"] = combined_df["Vecka"].apply(safe_week_int)
+    combined_df = combined_df.dropna(subset=["WeekInt"])
+    combined_df = combined_df[combined_df["WeekInt"].isin(allowed_weeks)]
+
+filtered_df = combined_df.copy()
 
 ####################################
 # 9) Visa i 3 kolumner (kombinerad data)
