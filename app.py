@@ -8,7 +8,6 @@ import urllib.parse
 import random
 import string
 
-# Sätt upp sidans titel och ikon
 st.set_page_config(page_title="UGL Kurser", page_icon="📅")
 st.title("UGL Kurser – Datum och priser")
 
@@ -36,7 +35,6 @@ st.sidebar.text_input("ID", value=st.session_state.random_id, disabled=True)
 # 3) SIDOPANEL: Filter
 ####################################
 st.sidebar.header("Filter")
-# Ändra etikett från "Vecka" till "V"
 col_v, col_pris = st.sidebar.columns(2)
 week_filter_input = col_v.text_input("V (t.ex. 7,15 eller 35-37)")
 price_filter_input = col_pris.number_input("Max Pris (kr)", min_value=0, value=0, step=100)
@@ -85,7 +83,7 @@ def extract_price(price_str):
         return 0
 
 def add_space_between_words(text):
-    # Infogar ett mellanslag mellan en liten och en stor bokstav
+    # Infoga mellanslag där en liten bokstav följs av en stor bokstav.
     return re.sub(r'(?<=[a-zåäö])(?=[A-ZÅÄÖ])', ' ', text)
 
 def format_spots(spots):
@@ -116,8 +114,6 @@ def format_course_date(datum):
     return datum
 
 def combine_handledare(h1, h2):
-    # Om båda fälten är ifyllda, kombinera dem med ett mellanslag,
-    # annars returnera det som finns.
     if h1 and h2:
         return f"{h1} {h2}"
     else:
@@ -153,7 +149,7 @@ def fetch_ugl_data():
             platser_kvar = kursplats_rader[1].split("Platser kvar:")[1].strip()
         kursledare_rader = list(cols[2].stripped_strings)
         h1 = add_space_between_words(kursledare_rader[0]) if kursledare_rader else ""
-        h2 = add_space_between_words(kursledare_rader[1]) if len(kursledare_rader) > 1 else ""
+        h2 = add_space_between_words(kursledare_rader[1]) if len(kursledare_rader)>1 else ""
         handledare = combine_handledare(h1, h2)
         pris_rader = list(cols[3].stripped_strings)
         pris = pris_rader[0] if pris_rader else ""
@@ -175,7 +171,6 @@ ugl_df = fetch_ugl_data()
 # 6) Hämta Rezon-data
 ####################################
 def process_rezon_row(row_dict):
-    # Kursfältet ignoreras
     kursdatum = row_dict.get("Kursdatum", "")
     week_part = ""
     date_part = kursdatum.strip()
@@ -193,7 +188,7 @@ def process_rezon_row(row_dict):
         utd = add_space_between_words(utbildningsort)
         parts = utd.split()
         new_anlaggning = parts[0] if parts else utd
-        new_ort = " ".join(parts[1:]) if len(parts) > 1 else ""
+        new_ort = " ".join(parts[1:]) if len(parts)>1 else ""
     handledare = row_dict.get("Handledare", "")
     def split_handledare(text):
         m = re.findall(r'[A-ZÅÄÖ][^A-ZÅÄÖ]+', text)
@@ -216,8 +211,8 @@ def process_rezon_row(row_dict):
         except:
             pass
     new_pris = f"{total_price} kr"
-    bokningsdetaljer = row_dict.get("Bokningsdetaljer", "")
-    new_spots = "Få" if "fullbokad" in bokningsdetaljer.lower() else bokningsdetaljer
+    boknings = row_dict.get("Bokningsdetaljer", "")
+    new_spots = "Få" if "fullbokad" in boknings.lower() else boknings
     return {
         "Vecka": new_week,
         "Datum": new_date,
@@ -250,14 +245,67 @@ rezon_list = fetch_rezon_data()
 rezon_df = pd.DataFrame(rezon_list)
 
 ####################################
-# 7) Kombinera data & filtrering
+# 7) Hämta Corecode-data
 ####################################
-if not rezon_df.empty:
-    combined_df = pd.concat([ugl_df, rezon_df], ignore_index=True)
-else:
-    combined_df = ugl_df.copy()
+def fetch_corecode_data():
+    corecode_url = "https://www.corecode.se/oppna-utbildningar/ugl-utbildning?showall=true&filterBookables=-1"
+    resp = requests.get(corecode_url)
+    soup = BeautifulSoup(resp.content, "html.parser")
+    table = soup.find("table")
+    if not table:
+        return []
+    headers = [th.get_text(strip=True) for th in table.find("tr").find_all("th")]
+    rows_data = []
+    for tr in table.find_all("tr")[1:]:
+        cells = [td.get_text(strip=True) for td in tr.find_all("td")]
+        if cells:
+            row_dict = dict(zip(headers, cells))
+            # För Corecode, kolumner: "Startdatum", "Plats", "Handledare", "Platser kvar"
+            startdatum = row_dict.get("Startdatum", "")
+            try:
+                dt = datetime.datetime.strptime(startdatum, "%Y-%m-%d")
+                datum_formatted = dt.strftime("%-d/%-m %y")  # Använder %-d och %-m (på Unix; på Windows kan du behöva %#d/%#m %y)
+                week_num = dt.isocalendar()[1]
+                vecka = f"📅 Vecka {week_num}"
+            except Exception as e:
+                datum_formatted = startdatum
+                vecka = ""
+            plats = row_dict.get("Plats", "")
+            if ":" in plats:
+                anlaggning, ort = [s.strip() for s in plats.split(":", 1)]
+            else:
+                anlaggning = plats
+                ort = ""
+            handledare = row_dict.get("Handledare", "")
+            handledare = add_space_between_words(handledare)
+            # Låt handledare visas på en rad (om det är två, behåll mellanslaget)
+            platser = row_dict.get("Platser kvar", "")
+            try:
+                platser_int = int(platser)
+                platser_out = "Få" if platser_int == 0 else platser
+            except:
+                platser_out = platser
+            rows_data.append({
+                "Vecka": vecka,
+                "Datum": datum_formatted,
+                "Anläggning": anlaggning,
+                "Ort": ort,
+                "Handledare": handledare,
+                "Pris": row_dict.get("Pris", ""),
+                "Platser kvar": platser_out,
+                "Källa": "Corecode"
+            })
+    return rows_data
 
-# Filtrering
+corecode_list = fetch_corecode_data()
+corecode_df = pd.DataFrame(corecode_list)
+
+####################################
+# 8) Kombinera data & Filtrering
+####################################
+# Kombinera UGL, Rezon och Corecode-data
+combined_df = pd.concat([ugl_df, rezon_df, corecode_df], ignore_index=True)
+
 week_filter_set = parse_week_filter(week_filter_input)
 price_filter_value = int(price_filter_input)
 restid_active = user_location.strip() != "" and user_restid > 0
@@ -284,6 +332,7 @@ if restid_active:
             return travel_time <= user_restid
         return True
     filtered_df = filtered_df[filtered_df.apply(passes_restid, axis=1)]
+
 if not (week_filter_set or price_filter_value or restid_active):
     current_week = datetime.datetime.now().isocalendar()[1]
     allowed_weeks = {current_week + 1, current_week + 2}
@@ -295,9 +344,9 @@ if not (week_filter_set or price_filter_value or restid_active):
     filtered_df = filtered_df[filtered_df["WeekInt"].isin(allowed_weeks)]
 
 ####################################
-# 8) Visa i 3 kolumner
+# 9) Visa i 3 kolumner (kombinerad data)
 ####################################
-st.subheader("🔍 Välj kurser (UGL + Rezon)")
+st.subheader("🔍 Välj kurser (Kombinerad)")
 courses = list(filtered_df.iterrows())
 selected_courses = []
 
@@ -326,14 +375,14 @@ if selected_courses:
     st.dataframe(pd.DataFrame(selected_courses), use_container_width=True)
 
 ####################################
-# 9) Visa fullständig kurslista
+# 10) Visa fullständig kurslista
 ####################################
 if st.button("Visa Fullständig kurslista"):
     st.subheader("📋 Fullständig kurslista")
     st.dataframe(filtered_df, use_container_width=True)
 
 ####################################
-# 10) Skicka via mail med HTML
+# 11) Skicka via mail med HTML
 ####################################
 st.subheader("Skicka information om dina valda kurser")
 if st.button("Skicka information via mail"):
@@ -387,12 +436,12 @@ if st.button("Skicka information via mail"):
         st.warning("Vänligen välj minst en kurs och ange din mailadress.")
 
 ####################################
-# 11) Visa rådata från Rezon (som lista, samma plats som övriga)
+# 12) Visa Corecode-data som lista (samma plats som övriga resultat)
 ####################################
-st.subheader("Rezon-data (skrapad)")
-rezon_list = fetch_rezon_data()
-if rezon_list:
-    for r in rezon_list:
-        st.markdown(f"- {r['Vecka']} {r['Datum']}, {r['Anläggning']}, {r['Ort']}, {r['Handledare']} , {r['Pris']} , {r['Platser kvar']} , {r['Källa']}")
+st.subheader("Corecode-data (skrapad)")
+corecode_list = fetch_corecode_data()
+if corecode_list:
+    for r in corecode_list:
+        st.markdown(f"- {r['Vecka']} {r['Datum']}, {r['Anläggning']}, {r['Ort']}, {r['Handledare']}, {r['Pris']}, {r['Platser kvar']}, {r['Källa']}")
 else:
-    st.write("Ingen data hittades från Rezon.")
+    st.write("Ingen Corecode-data hittades.")
