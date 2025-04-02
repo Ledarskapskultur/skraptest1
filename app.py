@@ -29,20 +29,16 @@ def fetch_ugl_data():
             datum = kursdatum_rader[0] if len(kursdatum_rader) > 0 else ""
             vecka = kursdatum_rader[1].replace("Vecka", "").strip() if len(kursdatum_rader) > 1 else ""
 
-            # === Kursplats ===
+            # === Kursplats: dela upp anläggning/ort ===
             kursplats_rader = list(cols[1].stripped_strings)
-            anlaggning = kursplats_rader[0] if len(kursplats_rader) > 0 else ""
-            ort = ""
-            platser_kvar = ""
+            anlaggning_och_ort = kursplats_rader[0] if len(kursplats_rader) > 0 else ""
+            anlaggning_split = anlaggning_och_ort.split(",")
+            anlaggning = anlaggning_split[0].strip()
+            ort = anlaggning_split[1].strip() if len(anlaggning_split) > 1 else ""
 
-            if len(kursplats_rader) > 1:
-                andra_raden = kursplats_rader[1]
-                if "Platser kvar:" in andra_raden:
-                    delar = andra_raden.split("Platser kvar:")
-                    ort = delar[0].strip()
-                    platser_kvar = delar[1].strip() if len(delar) > 1 else ""
-                else:
-                    ort = kursplats_rader[1].strip()
+            platser_kvar = ""
+            if len(kursplats_rader) > 1 and "Platser kvar:" in kursplats_rader[1]:
+                platser_kvar = kursplats_rader[1].split("Platser kvar:")[1].strip()
 
             # === Kursledare ===
             kursledare_rader = list(cols[2].stripped_strings)
