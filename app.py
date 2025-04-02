@@ -76,7 +76,8 @@ for i, row in df.head(9).iterrows():
         st.markdown("---")
         st.markdown(f"""
         📅 **Vecka {row['Vecka']}**   📆 **{row['Datum']}**  
-        🏨 **{row['Anläggning']}**   📍 **{row['Ort']}**  
+        🏨 **{row['Anläggning']}**  
+        📍 **{row['Ort']}**  
         💰 **{row['Pris']}**   ✅ **Platser kvar: {row['Platser kvar']}**  
         👥 **{row['Kursledare1']}**  
         👥 **{row['Kursledare2']}**
