@@ -14,7 +14,7 @@ def add_space_between_words(text):
 
 def shorten_year(datum):
     """
-    Ersätt '2025' med '25' om datumsträngen matchar mönstret "dd Mmm - dd Mmm yyyy".
+    Byt '2025' -> '25' om datumsträngen matchar "dd Mmm - dd Mmm yyyy".
     Exempel: "07 Apr - 11 Apr 2025" -> "07 Apr - 11 Apr 25"
     """
     return re.sub(r'(\d{2} \w{3} - \d{2} \w{3} )\d{2}(\d{2})', r'\1\2', datum)
@@ -34,7 +34,7 @@ def fetch_ugl_data():
             # === Kursdatum & Vecka ===
             kursdatum_rader = list(cols[0].stripped_strings)
             datum = kursdatum_rader[0] if len(kursdatum_rader) > 0 else ""
-            datum = shorten_year(datum)
+            datum = shorten_year(datum)  # Gör om årtalet till två siffror
             vecka = kursdatum_rader[1].replace("Vecka", "").strip() if len(kursdatum_rader) > 1 else ""
             
             # === Kursplats: Anläggning, Ort, Platser kvar ===
@@ -74,7 +74,7 @@ df = fetch_ugl_data()
 
 st.subheader("🔍 Välj kurser")
 
-# Visa kurser i 3 kolumner (3 per rad; justera .head(n) om du vill visa fler)
+# Visa kurser i 3 kolumner (3 per rad, totalt 9 kurser visas här; ändra .head(n) om du vill fler)
 cols = st.columns(3)
 selected_courses = []
 
@@ -82,14 +82,22 @@ for i, row in df.head(9).iterrows():
     col = cols[i % 3]
     with col:
         st.markdown("---")
-        st.markdown(f"""
-        📅 **Vecka {row['Vecka']}**   📆 **{row['Datum']}**  
-        🏨 **{row['Anläggning']}**  
-        📍 **{row['Ort']}**  
-        💰 **{row['Pris']}**   ✅ **Platser kvar: {row['Platser kvar']}**  
-        👥 **{row['Kursledare1']}**  
-        👥 **{row['Kursledare2']}**
-        """)
+        # Använd HTML med white-space: nowrap för att hindra radbrytning av årtal
+        st.markdown(
+            f"""
+            <div style="margin-bottom: 1em;">
+              <span style="white-space: nowrap;">
+                📅 <strong>Vecka {row['Vecka']}</strong> &nbsp; 📆 <strong>{row['Datum']}</strong>
+              </span><br>
+              🏨 <strong>{row['Anläggning']}</strong><br>
+              📍 <strong>{row['Ort']}</strong><br>
+              💰 <strong>{row['Pris']}</strong> &nbsp; ✅ <strong>Platser kvar: {row['Platser kvar']}</strong><br>
+              👥 <strong>{row['Kursledare1']}</strong><br>
+              👥 <strong>{row['Kursledare2']}</strong>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
         if st.checkbox("Välj denna kurs", key=f"val_{i}"):
             selected_courses.append(row)
 
