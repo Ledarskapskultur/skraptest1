@@ -69,12 +69,30 @@ def parse_week_filter(week_str):
                 pass
     return allowed
 
-def get_travel_time(user_city, mode):
-    travel_times = {
-        "Bil": {"Västerås": 1.0, "Kiruna": 6.0, "Eskilstuna": 0.0, "Stockholm": 1.5},
-        "Kollektivt": {"Västerås": 2.0, "Kiruna": 8.0, "Eskilstuna": 0.0, "Stockholm": 2.5},
+# Restid: Baserat på kundens plats och kursens ort (båda i gemener)
+def get_travel_time(customer, course, mode):
+    # Förenklad rese-dictionary (kan utökas)
+    # Vi definierar endast restid till "eskilstuna"
+    times = {
+        "Bil": {
+            "västerås": {"eskilstuna": 1.0},
+            "kiruna": {"eskilstuna": 6.0},
+            "stockholm": {"eskilstuna": 1.5},
+            "eskilstuna": {"eskilstuna": 0.0},
+        },
+        "Kollektivt": {
+            "västerås": {"eskilstuna": 2.0},
+            "kiruna": {"eskilstuna": 8.0},
+            "stockholm": {"eskilstuna": 2.5},
+            "eskilstuna": {"eskilstuna": 0.0},
+        }
     }
-    return travel_times.get(mode, {}).get(user_city, 99.0)
+    cust = customer.strip().lower()
+    crs = course.strip().lower()
+    try:
+        return times[mode][cust].get(crs, 99.0)
+    except:
+        return 99.0
 
 def extract_price(price_str):
     try:
@@ -83,7 +101,7 @@ def extract_price(price_str):
         return 0
 
 def add_space_between_words(text):
-    # Infoga mellanslag där en liten bokstav följs av en stor bokstav.
+    # Infogar mellanslag där en liten bokstav följs av en stor
     return re.sub(r'(?<=[a-zåäö])(?=[A-ZÅÄÖ])', ' ', text)
 
 def format_spots(spots):
@@ -143,7 +161,7 @@ def fetch_ugl_data():
         anlaggning_och_ort = kursplats_rader[0] if kursplats_rader else ""
         splitted = anlaggning_och_ort.split(",")
         anlaggning = splitted[0].strip()
-        ort = splitted[1].strip() if len(splitted) > 1 else ""
+        ort = splitted[1].strip() if len(splitted)>1 else ""
         platser_kvar = ""
         if len(kursplats_rader) > 1 and "Platser kvar:" in kursplats_rader[1]:
             platser_kvar = kursplats_rader[1].split("Platser kvar:")[1].strip()
@@ -260,38 +278,41 @@ def fetch_corecode_data():
         cells = [td.get_text(strip=True) for td in tr.find_all("td")]
         if cells:
             row_dict = dict(zip(headers, cells))
-            # För Corecode, kolumner: "Startdatum", "Plats", "Handledare", "Platser kvar"
+            # För Corecode: "Startdatum", "Plats", "Handledare", "Platser kvar", "Pris"
             startdatum = row_dict.get("Startdatum", "")
             try:
                 dt = datetime.datetime.strptime(startdatum, "%Y-%m-%d")
-                datum_formatted = dt.strftime("%-d/%-m %y")  # Använder %-d och %-m (på Unix; på Windows kan du behöva %#d/%#m %y)
+                datum_formatted = dt.strftime("%-d/%-m %y")
                 week_num = dt.isocalendar()[1]
                 vecka = f"📅 Vecka {week_num}"
-            except Exception as e:
+            except:
                 datum_formatted = startdatum
                 vecka = ""
             plats = row_dict.get("Plats", "")
             if ":" in plats:
-                anlaggning, ort = [s.strip() for s in plats.split(":", 1)]
+                left, right = plats.split(":", 1)
+                # Vi tolkar vänstra delen som anläggning och högra som ort
+                anlaggning = left.strip()
+                ort = right.strip()
             else:
                 anlaggning = plats
                 ort = ""
             handledare = row_dict.get("Handledare", "")
             handledare = add_space_between_words(handledare)
-            # Låt handledare visas på en rad (om det är två, behåll mellanslaget)
             platser = row_dict.get("Platser kvar", "")
             try:
                 platser_int = int(platser)
                 platser_out = "Få" if platser_int == 0 else platser
             except:
                 platser_out = platser
+            pris = row_dict.get("Pris", "")
             rows_data.append({
                 "Vecka": vecka,
                 "Datum": datum_formatted,
                 "Anläggning": anlaggning,
                 "Ort": ort,
                 "Handledare": handledare,
-                "Pris": row_dict.get("Pris", ""),
+                "Pris": pris,
                 "Platser kvar": platser_out,
                 "Källa": "Corecode"
             })
@@ -303,11 +324,26 @@ corecode_df = pd.DataFrame(corecode_list)
 ####################################
 # 8) Kombinera data & Filtrering
 ####################################
-# Kombinera UGL, Rezon och Corecode-data
 combined_df = pd.concat([ugl_df, rezon_df, corecode_df], ignore_index=True)
 
 week_filter_set = parse_week_filter(week_filter_input)
 price_filter_value = int(price_filter_input)
+# Restid-filter: jämför kundens plats och kursens ort
+def get_travel_time_pair(customer, course):
+    # Definiera rese-tider för transport till "eskilstuna" (exempel)
+    times = {
+        "Bil": {"västerås": {"eskilstuna": 1.0}, "kiruna": {"eskilstuna": 6.0},
+                "stockholm": {"eskilstuna": 1.5}, "eskilstuna": {"eskilstuna": 0.0}},
+        "Kollektivt": {"västerås": {"eskilstuna": 2.0}, "kiruna": {"eskilstuna": 8.0},
+                        "stockholm": {"eskilstuna": 2.5}, "eskilstuna": {"eskilstuna": 0.0}},
+    }
+    cust = customer.strip().lower()
+    crs = course.strip().lower()
+    try:
+        return times[user_transport][cust].get(crs, 99.0)
+    except:
+        return 99.0
+
 restid_active = user_location.strip() != "" and user_restid > 0
 filtered_df = combined_df.copy()
 
@@ -326,13 +362,12 @@ if price_filter_value > 0:
     filtered_df = filtered_df[filtered_df["PriceInt"] <= (price_filter_value + 500)]
 if restid_active:
     def passes_restid(row):
-        ort = row["Ort"].replace("📍", "").strip().lower()
-        if ort == "eskilstuna":
-            travel_time = get_travel_time(user_location.strip(), user_transport)
-            return travel_time <= user_restid
-        return True
+        # Använd kundens plats (user_location) och kursens Ort (utan prefix)
+        course_ort = row["Ort"].replace("📍", "").strip().lower()
+        customer = user_location.strip()
+        travel_time = get_travel_time_pair(customer, course_ort)
+        return travel_time <= user_restid
     filtered_df = filtered_df[filtered_df.apply(passes_restid, axis=1)]
-
 if not (week_filter_set or price_filter_value or restid_active):
     current_week = datetime.datetime.now().isocalendar()[1]
     allowed_weeks = {current_week + 1, current_week + 2}
@@ -382,7 +417,7 @@ if st.button("Visa Fullständig kurslista"):
     st.dataframe(filtered_df, use_container_width=True)
 
 ####################################
-# 11) Skicka via mail med HTML
+# 11) Skicka via mail med HTML (kombinerad data)
 ####################################
 st.subheader("Skicka information om dina valda kurser")
 if st.button("Skicka information via mail"):
@@ -436,12 +471,10 @@ if st.button("Skicka information via mail"):
         st.warning("Vänligen välj minst en kurs och ange din mailadress.")
 
 ####################################
-# 12) Visa Corecode-data som lista (samma plats som övriga resultat)
+# 12) Visa Corecode-data som lista (på samma ställe som övriga resultat)
 ####################################
 st.subheader("Corecode-data (skrapad)")
-corecode_list = fetch_corecode_data()
-if corecode_list:
-    for r in corecode_list:
-        st.markdown(f"- {r['Vecka']} {r['Datum']}, {r['Anläggning']}, {r['Ort']}, {r['Handledare']}, {r['Pris']}, {r['Platser kvar']}, {r['Källa']}")
+if not corecode_df.empty:
+    st.dataframe(corecode_df, use_container_width=True)
 else:
     st.write("Ingen Corecode-data hittades.")
