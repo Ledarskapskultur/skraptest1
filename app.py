@@ -159,4 +159,5 @@ if filter_active:
     # Veckofiltrering
     if week_filter_set:
         try:
-            filtered_df = filtered_df[filtered_df["Ve_
+            filtered_df = filtered_df[filtered_df["Vecka"].astype(int).isin(week_filter_set)]
+
