@@ -9,26 +9,53 @@ import urllib.parse
 st.set_page_config(page_title="UGL Kurser", page_icon="📅")
 st.title("UGL Kurser – Datum och priser")
 
-# SIDOPANEL: Kontaktuppgifter och filter
-st.sidebar.header("Kontaktuppgifter")
-namn = st.sidebar.text_input("Namn")
-telefon = st.sidebar.text_input("Telefon")
-mail = st.sidebar.text_input("Mail")
-
-st.sidebar.header("Filter")
-week_filter_input = st.sidebar.text_input("Vecka (t.ex. 15,7 eller 35-37)")
-price_filter_input = st.sidebar.number_input("Max Pris (kr)", min_value=0, value=0, step=100)
-
-st.sidebar.subheader("Restid")
-user_location = st.sidebar.text_input("Plats (din plats)")
-user_transport = st.sidebar.selectbox("Färdsätt", options=["Bil", "Kollektivt"])
-user_restid = st.sidebar.number_input("Restid (timmar)", min_value=0, value=0, step=1)
-
 # Initiera request counter i session_state (om den inte redan finns)
 if "request_counter" not in st.session_state:
     st.session_state.request_counter = 1
 
-# ---- Hjälpfunktioner ----
+#############################
+# SIDOPANEL: Kontaktuppgifter
+#############################
+
+st.sidebar.header("Kontaktuppgifter")
+
+# Rad 1: Namn och Telefon
+col_namn, col_tel = st.sidebar.columns(2)
+namn = col_namn.text_input("Namn")
+telefon = col_tel.text_input("Telefon")
+
+# Rad 2: Mail
+mail = st.sidebar.text_input("Mail")
+
+# Rad 3: Automatiskt ID (visas men kan inte ändras)
+request_id = st.session_state.request_counter
+st.sidebar.text_input("ID", value=str(request_id), disabled=True)
+
+#############################
+# SIDOPANEL: Filter
+#############################
+
+st.sidebar.header("Filter")
+
+# Rad 1: Vecka och Max Pris
+col_vecka, col_pris = st.sidebar.columns(2)
+week_filter_input = col_vecka.text_input("Vecka (t.ex. 15,7 eller 35-37)")
+price_filter_input = col_pris.number_input("Max Pris (kr)", min_value=0, value=0, step=100)
+
+# Restid
+st.sidebar.subheader("Restid")
+
+# Rad 1: Plats
+user_location = st.sidebar.text_input("Plats (din plats)")
+
+# Rad 2: Färdsätt och restid
+col_far, col_res = st.sidebar.columns(2)
+user_transport = col_far.selectbox("Färdsätt", options=["Bil", "Kollektivt"])
+user_restid = col_res.number_input("Restid (timmar)", min_value=0, value=0, step=1)
+
+#############################
+# Hjälpfunktioner
+#############################
 
 def parse_week_filter(week_str):
     """Parsa veckofiltreringssträngen till en mängd heltal."""
@@ -144,7 +171,9 @@ def format_spots(spots):
             color = "orange"
     return f'<span style="color: {color}; font-weight: bold;">✅</span> {text}'
 
-# ---- Hämtning av kursdata ----
+#############################
+# Hämtning av kursdata
+#############################
 
 URL = "https://www.uglkurser.se/datumochpriser.php"
 
@@ -203,7 +232,9 @@ def fetch_ugl_data():
 
 df = fetch_ugl_data()
 
-# ---- Filtrering ----
+#############################
+# Filtrering
+#############################
 
 week_filter_set = parse_week_filter(week_filter_input)
 price_filter_value = int(price_filter_input) if price_filter_input else 0
@@ -237,7 +268,9 @@ else:
     except:
         pass
 
-# ---- Visa alla kurser i rader med 3 per rad ----
+#############################
+# Visa alla kurser i rader med 3 per rad
+#############################
 
 st.subheader("🔍 Välj kurser")
 courses = list(filtered_df.iterrows())
@@ -270,13 +303,17 @@ if selected_courses:
     st.subheader("✅ Du har valt följande kurser:")
     st.dataframe(pd.DataFrame(selected_courses), use_container_width=True)
 
-# ---- Visa fullständig kurslista vid knapptryck ----
+#############################
+# Visa fullständig kurslista
+#############################
 
 if st.button("Visa Fullständig kurslista"):
     st.subheader("📋 Fullständig kurslista")
     st.dataframe(filtered_df, use_container_width=True)
 
-# ---- Skicka via mail med HTML (med ID under kontaktinfo) ----
+#############################
+# Skicka via mail med HTML
+#############################
 
 st.subheader("Skicka information om dina valda kurser")
 if st.button("Skicka information via mail"):
