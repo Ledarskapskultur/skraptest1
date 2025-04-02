@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import re
 import datetime
+import urllib.parse
 
 st.set_page_config(page_title="UGL Kurser", page_icon="📅")
 st.title("UGL Kurser – Datum och priser")
@@ -146,12 +147,10 @@ df = fetch_ugl_data()
 
 # Filtrering
 
-# Parsning av veckofilter
 week_filter_set = parse_week_filter(week_filter_input)
 price_filter_value = int(price_filter_input) if price_filter_input else 0
 restid_active = user_location.strip() != "" and user_restid > 0
 
-# Bestäm om något filter är aktivt
 filter_active = bool(week_filter_set or price_filter_value > 0 or restid_active)
 
 filtered_df = df.copy()
@@ -160,65 +159,4 @@ if filter_active:
     # Veckofiltrering
     if week_filter_set:
         try:
-            filtered_df = filtered_df[filtered_df["Vecka"].astype(int).isin(week_filter_set)]
-        except Exception as e:
-            st.error("Fel vid filtrering av vecka: " + str(e))
-    
-    # Prisfiltrering (kurspris får ligga inom maxpris + 500)
-    if price_filter_value > 0:
-        filtered_df["PriceInt"] = filtered_df["Pris"].apply(extract_price)
-        filtered_df = filtered_df[filtered_df["PriceInt"] <= (price_filter_value + 500)]
-    
-    # Restidsfiltrering: Gäller endast kurser med Ort == "Eskilstuna"
-    if restid_active:
-        def passes_restid(row):
-            if row["Ort"].lower() == "eskilstuna":
-                travel_time = get_travel_time(user_location.strip(), user_transport)
-                return travel_time <= user_restid
-            else:
-                return True
-        filtered_df = filtered_df[filtered_df.apply(passes_restid, axis=1)]
-else:
-    # Om inga filter anges, visa de kommande 2 veckornas kurser (utifrån aktuell vecka)
-    current_week = datetime.datetime.now().isocalendar()[1]
-    allowed_weeks = {current_week + 1, current_week + 2}
-    try:
-        filtered_df = filtered_df[filtered_df["Vecka"].astype(int).isin(allowed_weeks)]
-    except:
-        pass
-
-# VISNING AV KURSER: 3 kolumner med checkboxar
-
-st.subheader("🔍 Välj kurser")
-
-cols = st.columns(3)
-selected_courses = []
-# Visa högst 9 kurser (ändra .head(n) vid behov)
-for i, row in filtered_df.head(9).iterrows():
-    col = cols[i % 3]
-    with col:
-        st.markdown("---")
-        st.markdown(
-            f"""
-            <div style="margin-bottom: 1em;">
-              <span style="white-space: nowrap;">
-                📅 <strong>Vecka {row['Vecka']}</strong> &nbsp; 📆 <strong>{row['Datum']}</strong>
-              </span><br>
-              🏨 <strong>{row['Anläggning']}</strong><br>
-              📍 <strong>{row['Ort']}</strong><br>
-              💰 <strong>{row['Pris']}</strong> &nbsp; ✅ <strong>Platser kvar: {row['Platser kvar']}</strong><br>
-              👥 <strong>{row['Kursledare1']}</strong><br>
-              👥 <strong>{row['Kursledare2']}</strong>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-        if st.checkbox("Välj denna kurs", key=f"val_{i}"):
-            selected_courses.append(row)
-
-if selected_courses:
-    st.subheader("✅ Du har valt följande kurser:")
-    st.dataframe(pd.DataFrame(selected_courses), use_container_width=True)
-
-st.subheader("📋 Fullständig kurslista")
-st.dataframe(filtered_df, use_container_width=True)
+            filtered_df = filtered_df[filtered_df["Ve_
