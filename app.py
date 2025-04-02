@@ -241,3 +241,83 @@ for i in range(0, len(courses), 3):
             <div style="margin-bottom: 1em;">
               <span style="white-space: nowrap;">
                 📅 <strong>Vecka {row["Vecka"]}</strong> &nbsp; 
+                <strong>{row["Datum"]}</strong>
+              </span><br>
+              🏨 <strong>{row["Anläggning"]}</strong><br>
+              📍 <strong>{row["Ort"]}</strong><br>
+              💰 <strong>{row["Pris"]}</strong> &nbsp; {spots_html}<br>
+              👥 <strong>{row["Kursledare1"]}</strong><br>
+              👥 <strong>{row["Kursledare2"]}</strong>
+            </div>
+            """
+            st.markdown(block, unsafe_allow_html=True)
+            if st.checkbox("Välj denna kurs", key=f"val_{idx}"):
+                selected_courses.append(row)
+
+if selected_courses:
+    st.subheader("✅ Du har valt följande kurser:")
+    st.dataframe(pd.DataFrame(selected_courses), use_container_width=True)
+
+#############################
+# Visa fullständig kurslista
+#############################
+
+if st.button("Visa Fullständig kurslista"):
+    st.subheader("📋 Fullständig kurslista")
+    st.dataframe(filtered_df, use_container_width=True)
+
+#############################
+# Skicka via mail med HTML
+#############################
+
+st.subheader("Skicka information om dina valda kurser")
+if st.button("Skicka information via mail"):
+    if selected_courses and mail.strip():
+        # Hämta det aktuella ID:t från session_state
+        request_id = st.session_state.random_id
+        # Efter att mail skickats generera ett nytt ID för nästa gång
+        st.session_state.random_id = generate_random_id()
+
+        table_html = f"""
+        Hej {namn},<br>
+        Namn: {namn} &nbsp;&nbsp; Telefon: {telefon}<br>
+        Mailadress: {mail}<br>
+        Förfrågan ID: {request_id}<br><br>
+        Här kommer dina valda kurser:<br><br>
+        <table border="1" style="border-collapse: collapse;">
+          <tr>
+            <th>Vecka & Pris</th>
+            <th>Datum</th>
+            <th>Anläggning</th>
+            <th>Ort</th>
+          </tr>
+        """
+        for course in selected_courses:
+            table_html += f"""
+          <tr>
+            <td>Vecka {course['Vecka']}<br>Pris: {course['Pris']}</td>
+            <td>{course['Datum']}</td>
+            <td>{course['Anläggning']}</td>
+            <td>{course['Ort']}</td>
+          </tr>
+            """
+        table_html += """
+        </table>
+        <br>
+        Hälsningar,<br>
+        Ditt Företag
+        """
+        table_html_single = table_html.replace("\n", "").replace("\r", "")
+        subject = f"Valda kurser - Förfrågan ID: {request_id}"
+        mailto_link = (
+            f"mailto:{mail}"
+            f"?subject={urllib.parse.quote(subject)}"
+            f"&body={urllib.parse.quote(table_html_single)}"
+        )
+        st.markdown(
+            f"**Klicka [här]({mailto_link}) för att skicka ett mail med dina valda kurser.**<br>"
+            f"<em>OBS! Alla e-postklienter visar inte HTML korrekt.</em>",
+            unsafe_allow_html=True
+        )
+    else:
+        st.warning("Vänligen välj minst en kurs och ange din mailadress.")
