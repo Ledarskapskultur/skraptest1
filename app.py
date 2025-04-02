@@ -24,12 +24,10 @@ def fetch_ugl_data():
     for row in rows:
         cols = row.find_all("td")
         if len(cols) >= 4:
-            # === Kursdatum ===
             kursdatum_rader = list(cols[0].stripped_strings)
             datum = kursdatum_rader[0] if len(kursdatum_rader) > 0 else ""
             vecka = kursdatum_rader[1].replace("Vecka", "").strip() if len(kursdatum_rader) > 1 else ""
 
-            # === Kursplats ===
             kursplats_rader = list(cols[1].stripped_strings)
             anlaggning_och_ort = kursplats_rader[0] if len(kursplats_rader) > 0 else ""
             anlaggning_split = anlaggning_och_ort.split(",")
@@ -40,12 +38,10 @@ def fetch_ugl_data():
             if len(kursplats_rader) > 1 and "Platser kvar:" in kursplats_rader[1]:
                 platser_kvar = kursplats_rader[1].split("Platser kvar:")[1].strip()
 
-            # === Kursledare ===
             kursledare_rader = list(cols[2].stripped_strings)
             kursledare1 = add_space_between_words(kursledare_rader[0]) if len(kursledare_rader) > 0 else ""
             kursledare2 = add_space_between_words(kursledare_rader[1]) if len(kursledare_rader) > 1 else ""
 
-            # === Pris ===
             pris_rader = list(cols[3].stripped_strings)
             pris = pris_rader[0] if len(pris_rader) > 0 else ""
 
@@ -64,20 +60,26 @@ def fetch_ugl_data():
 
 df = fetch_ugl_data()
 
-st.subheader("🔍 Förhandsvisning av de tre första kurserna")
+st.subheader("🔍 Välj kurser")
 
-col1, col2 = st.columns(2)
+# Tre kolumner per rad
+cols = st.columns(3)
+selected_courses = []
 
-for i, row in df.head(3).iterrows():
-    target_col = col1 if i % 2 == 0 else col2
-    with target_col:
+for i, row in df.head(9).iterrows():  # Visa t.ex. 9 kurser totalt
+    col = cols[i % 3]
+    with col:
+        st.markdown("---")
         st.markdown(f"""
-        ---
-        📅 **Vecka {row['Vecka']}**   📆 **Datum: {row['Datum']}**  
-        🏨 **Anläggning: {row['Anläggning']}**   📍 **Ort: {row['Ort']}**  
-        💰 **Pris: {row['Pris']}**   ✅ **Platser kvar: {row['Platser kvar']}**  
-        👥 **Kursledare: {row['Kursledare1']} och {row['Kursledare2']}**
+        📅 **Vecka {row['Vecka']}**   📆 **{row['Datum']}**  
+        🏨 **{row['Anläggning']}**   📍 **{row['Ort']}**  
+        💰 **{row['Pris']}**   ✅ **{row['Platser kvar']}**  
+        👥 **{row['Kursledare1']} och {row['Kursledare2']}**
         """)
+        if st.checkbox("Välj denna kurs", key=f"val_{i}"):
+            selected_courses.append(row)
 
-st.subheader("📋 Fullständig kurslista")
-st.dataframe(df, use_container_width=True)
+# Visa valda kurser
+if selected_courses:
+    st.subheader("✅ Du har valt följande kurser:")
+    st.dataframe(pd.DataFrame(selected_courses), use_container_width=True)
