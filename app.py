@@ -90,16 +90,22 @@ def shorten_year(datum):
 
 def format_spots(spots):
     """
-    Returnerar en HTML-sträng med en färgad ikon och sedan texten (ofärgad).
-    - Grönt om antalet platser är 3 eller fler.
-    - Orange om det är "Få" eller numeriskt mindre än 3.
-    - Rött om texten innehåller "fullbokad".
+    Returnerar en HTML-sträng med en färgad ✅ beroende på antalet platser kvar.
+    Färgen appliceras endast på ✅:
+      - Grönt om numeriskt värde är 3 eller högre.
+      - Orange om "Få" eller numeriskt mindre än 3.
+      - Rött om "fullbokad" finns i texten.
+    Efter ikonen visas siffran/strängen (i svart).
     """
-    if "fullbokad" in spots.lower():
+    text = spots.strip()
+    if "fullbokad" in text.lower():
         color = "red"
+    elif "få" in text.lower():
+        color = "orange"
     else:
         try:
-            digits = re.sub(r"\D", "", spots)
+            # Extrahera siffror (t.ex. "3+" ger "3")
+            digits = re.sub(r"\D", "", text)
             if digits == "":
                 color = "orange"
             else:
@@ -110,7 +116,7 @@ def format_spots(spots):
                     color = "green"
         except:
             color = "orange"
-    return f'<span style="color: {color};">✅</span> <span style="color: black;">{spots}</span>'
+    return f'<span style="color: {color}; font-weight: bold;">✅</span> {text}'
 
 # Hämtning och tolkning av kursdata
 
@@ -211,42 +217,40 @@ else:
     except:
         pass
 
-# Visa kurser i 3 kolumner med checkboxar
+# Visa alla kurser i rader om 3 per rad
 
 st.subheader("🔍 Välj kurser")
-
-cols = st.columns(3)
+courses = list(filtered_df.iterrows())
 selected_courses = []
 
-for i, row in filtered_df.head(9).iterrows():
-    col = cols[i % 3]
-    with col:
-        st.markdown("---")
-        # Använd format_spots() för att visa platsinformationen med färgad ikon (✅) och svart text för värdet.
-        spots_html = format_spots(row["Platser kvar"])
-        block = f"""
-        <div style="margin-bottom: 1em;">
-          <span style="white-space: nowrap;">
-            📅 <strong>Vecka {row["Vecka"]}</strong> &nbsp; 
-            📆 <strong>{row["Datum"]}</strong>
-          </span><br>
-          🏨 <strong>{row["Anläggning"]}</strong><br>
-          📍 <strong>{row["Ort"]}</strong><br>
-          💰 <strong>{row["Pris"]}</strong> &nbsp; {spots_html}<br>
-          👥 <strong>{row["Kursledare1"]}</strong><br>
-          👥 <strong>{row["Kursledare2"]}</strong>
-        </div>
-        """
-        st.markdown(block, unsafe_allow_html=True)
-        
-        if st.checkbox("Välj denna kurs", key=f"val_{i}"):
-            selected_courses.append(row)
+for i in range(0, len(courses), 3):
+    cols = st.columns(3)
+    for j, (idx, row) in enumerate(courses[i:i+3]):
+        with cols[j]:
+            st.markdown("---")
+            spots_html = format_spots(row["Platser kvar"])
+            block = f"""
+            <div style="margin-bottom: 1em;">
+              <span style="white-space: nowrap;">
+                📅 <strong>Vecka {row["Vecka"]}</strong> &nbsp; 
+                📆 <strong>{row["Datum"]}</strong>
+              </span><br>
+              🏨 <strong>{row["Anläggning"]}</strong><br>
+              📍 <strong>{row["Ort"]}</strong><br>
+              💰 <strong>{row["Pris"]}</strong> &nbsp; {spots_html}<br>
+              👥 <strong>{row["Kursledare1"]}</strong><br>
+              👥 <strong>{row["Kursledare2"]}</strong>
+            </div>
+            """
+            st.markdown(block, unsafe_allow_html=True)
+            if st.checkbox("Välj denna kurs", key=f"val_{idx}"):
+                selected_courses.append(row)
 
 if selected_courses:
     st.subheader("✅ Du har valt följande kurser:")
     st.dataframe(pd.DataFrame(selected_courses), use_container_width=True)
 
-# Knapp för att visa fullständig kurslista
+# Knapp för att visa fullständig kurslista (visas vid klick)
 if st.button("Visa Fullständig kurslista"):
     st.subheader("📋 Fullständig kurslista")
     st.dataframe(filtered_df, use_container_width=True)
@@ -280,8 +284,4 @@ if st.button("Skicka information via mail"):
         subject = "Valda kurser"
         mailto_link = f"mailto:{mail}?subject={urllib.parse.quote(subject)}&body={urllib.parse.quote(table_html)}"
         st.markdown(
-            f"**Klicka [här]({mailto_link}) för att skicka ett mail med dina valda kurser.**<br><em>OBS! Alla e-postklienter visar inte HTML korrekt.</em>",
-            unsafe_allow_html=True
-        )
-    else:
-        st.warning("Vänligen välj minst en kurs och ange din mailadress.")
+            f"**Klicka [här]({mailto_link}) för att
