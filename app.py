@@ -25,34 +25,40 @@ def fetch_ugl_data():
         cols = row.find_all("td")
         if len(cols) >= 4:
             # === Kursdatum ===
-            kursdatum_rader = cols[0].stripped_strings
-            kursdatum_rader = list(kursdatum_rader)
+            kursdatum_rader = list(cols[0].stripped_strings)
             datum = kursdatum_rader[0] if len(kursdatum_rader) > 0 else ""
             vecka = kursdatum_rader[1].replace("Vecka", "").strip() if len(kursdatum_rader) > 1 else ""
 
             # === Kursplats ===
-            kursplats_rader = cols[1].stripped_strings
-            kursplats_rader = list(kursplats_rader)
+            kursplats_rader = list(cols[1].stripped_strings)
             anlaggning = kursplats_rader[0] if len(kursplats_rader) > 0 else ""
-            ort = kursplats_rader[1].replace("Platser kvar:", "").strip() if len(kursplats_rader) > 1 else ""
+            ort = ""
+            platser_kvar = ""
+
+            if len(kursplats_rader) > 1:
+                andra_raden = kursplats_rader[1]
+                if "Platser kvar:" in andra_raden:
+                    delar = andra_raden.split("Platser kvar:")
+                    ort = delar[0].strip()
+                    platser_kvar = delar[1].strip() if len(delar) > 1 else ""
+                else:
+                    ort = kursplats_rader[1].strip()
 
             # === Kursledare ===
-            kursledare_rader = cols[2].stripped_strings
-            kursledare_rader = list(kursledare_rader)
+            kursledare_rader = list(cols[2].stripped_strings)
             kursledare1 = kursledare_rader[0] if len(kursledare_rader) > 0 else ""
             kursledare2 = kursledare_rader[1] if len(kursledare_rader) > 1 else ""
 
             # === Pris ===
-            pris_rader = cols[3].stripped_strings
-            pris_rader = list(pris_rader)
+            pris_rader = list(cols[3].stripped_strings)
             pris = pris_rader[0] if len(pris_rader) > 0 else ""
 
-            # Lägg till rad i listan
             data.append({
                 "Vecka": vecka,
                 "Datum": datum,
                 "Anläggning": anlaggning,
                 "Ort": ort,
+                "Platser kvar": platser_kvar,
                 "Kursledare1": kursledare1,
                 "Kursledare2": kursledare2,
                 "Pris": pris
@@ -71,6 +77,7 @@ for index, row in df.head(3).iterrows():
     📆 Datum: {row['Datum']}  
     🏨 Anläggning: {row['Anläggning']}  
     📍 Ort: {row['Ort']}  
+    ✅ Platser kvar: {row['Platser kvar']}  
     👥 Kursledare: {row['Kursledare1']} och {row['Kursledare2']}  
     💰 Pris: {row['Pris']}
     """)
